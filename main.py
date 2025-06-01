@@ -20,6 +20,8 @@ parser.add_argument('--data_type', type=str,
                     default='unstructured_data')
 parser.add_argument('--downsample_count', type=int, default=8000,
                     help='downsample points count')
+parser.add_argument('--surf_downsample_count', type=int, default=8000,
+                    help=' surface downsample points count')
 parser.add_argument('--data_num', type=int, default=100,
                     help='data num')
 parser.add_argument('--test_split', type=float, default=0.2, help='train/test split')
@@ -35,6 +37,7 @@ parser.add_argument('--out_channels', default=1, type=int)
 
 parser.add_argument("--eval", action="store_true", help="evaluate model or not")
 parser.add_argument("--OOD", action="store_true", help="OOD experiment or not")
+parser.add_argument('--use_surf', action="store_true", help="use surface data or not")
 parser.add_argument("--mode", type=str, default='T2Q', help="different tasks, include T2Q, Q2T and T2T")
 
 args = parser.parse_args()
@@ -53,8 +56,10 @@ if args.OOD:
         max_workers=1, # Read the data evenly and split it directly
         data_num=args.data_num,
         downsample_count=args.downsample_count,
+        surf_downsample_count=args.surf_downsample_count,
         data_type=args.data_type,
-        normalize=True
+        normalize=True,
+        use_surf=args.use_surf
     )
     # print(stats)
     N = len(all_graphs)
@@ -77,8 +82,10 @@ else:
         max_workers=8,
         data_num=args.data_num,
         downsample_count=args.downsample_count,
+        surf_downsample_count=args.surf_downsample_count,
         data_type=args.data_type,
-        normalize=True
+        normalize=True,
+        use_surf=args.use_surf
     )
     # print(stats)
     N = len(all_graphs)
@@ -144,12 +151,21 @@ if not os.path.exists(path):
 if args.eval:
     model_path = path + f'model_{hparams["epochs"]}_{args.mode}.pth'
     try:
-        model.load_state_dict(torch.load(model_path).state_dict())
-        print(model)
+        state_dict = torch.load(model_path)
+        if isinstance(state_dict, dict):
+            model.load_state_dict(state_dict)
+            print("Loaded model from state_dict.")
+        else:
+            model = state_dict
+            print("Loaded entire model object.")
     except FileNotFoundError:
-        print("No checkpoint found")
-    except TypeError:
-        print("Wrong checkpoing")
+        print("No checkpoint found at", model_path)
+    except AttributeError:
+        print("Loaded object has no state_dict, might be malformed.")
+    except TypeError as e:
+        print("Checkpoint type error:", e)
+    except RuntimeError as e:
+        print("Runtime error when loading model:", e)
     train.evaluate(device, model, test_graphs, mode=args.mode)
 else:
     model = train.main(device, train_graphs, test_graphs, model, hparams, path, mode=args.mode, OOD=args.OOD)

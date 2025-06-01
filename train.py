@@ -26,9 +26,9 @@ def train(device, model, train_loader, optimizer, scheduler, mode):
             data = data.to(device)
             optimizer.zero_grad()
 
-            input = data.x.unsqueeze(0)
+            input = data.t.unsqueeze(0)
             pos = data.pos.unsqueeze(0)
-            targets = data.y.reshape(-1)
+            targets = data.q.reshape(-1)
 
             out = model(input, pos).reshape(-1)
 
@@ -46,9 +46,9 @@ def train(device, model, train_loader, optimizer, scheduler, mode):
             data = data.to(device)
             optimizer.zero_grad()
 
-            input = data.y.reshape(1, data.y.shape[0], 1)
+            input = data.q.reshape(1, data.q.shape[0], -1)
             pos = data.pos.unsqueeze(0)
-            targets = data.x.reshape(-1)
+            targets = data.t.reshape(-1)
 
             out = model(input, pos).reshape(-1)
 
@@ -66,9 +66,30 @@ def train(device, model, train_loader, optimizer, scheduler, mode):
             data = data.to(device)
             optimizer.zero_grad()
 
-            input = data.x[:, :11].reshape(1, data.x.shape[0], -1)
+            input = data.t[:, :11].reshape(1, data.t.shape[0], -1)
             pos = data.pos.unsqueeze(0)
-            targets = data.x[:, 11:].reshape(-1)
+            targets = data.t[:, 11:].reshape(-1)
+
+            out = model(input, pos).reshape(-1)
+
+            loss_var = criterion_func(out, targets).mean(dim=0)
+            loss = loss_var.mean()
+
+            loss.backward()
+
+            optimizer.step()
+            scheduler.step()
+
+            total_losses.append(loss.item())
+
+    elif mode == 'S2Q':
+        for data in train_loader:
+            data = data.to(device)
+            optimizer.zero_grad()
+
+            input = data.surf.reshape(1, data.surf.shape[0], -1)
+            pos = data.pos.unsqueeze(0)
+            targets = data.q.reshape(-1)
 
             out = model(input, pos).reshape(-1)
 
@@ -95,9 +116,9 @@ def test(device, model, test_loader, mode):
     if mode == 'T2Q':
         for data in test_loader:
             data = data.to(device)
-            input = data.x.unsqueeze(0)
+            input = data.t.unsqueeze(0)
             pos = data.pos.unsqueeze(0)
-            targets = data.y.reshape(-1)
+            targets = data.q.reshape(-1)
 
             out = model(input, pos).reshape(-1)
 
@@ -109,9 +130,9 @@ def test(device, model, test_loader, mode):
     elif mode == 'Q2T':
         for data in test_loader:
             data = data.to(device)
-            input = data.y.reshape(1, data.y.shape[0], 1)
+            input = data.q.reshape(1, data.q.shape[0], 1)
             pos = data.pos.unsqueeze(0)
-            targets = data.x.reshape(-1)
+            targets = data.t.reshape(-1)
 
             out = model(input, pos).reshape(-1)
 
@@ -122,9 +143,23 @@ def test(device, model, test_loader, mode):
     elif mode == 'T2T':
         for data in test_loader:
             data = data.to(device)
-            input = data.x[:, :11].unsqueeze(0)
+            input = data.t[:, :11].unsqueeze(0)
             pos = data.pos.unsqueeze(0)
-            targets = data.x[:, 11:].reshape(-1)
+            targets = data.t[:, 11:].reshape(-1)
+
+            out = model(input, pos).reshape(-1)
+
+            loss_var = criterion_func(out, targets).mean(dim=0)
+            loss = loss_var.mean()
+
+            total_losses.append(loss.item())
+
+    elif mode == 'S2Q':
+        for data in test_loader:
+            data = data.to(device)
+            input = data.surf.unsqueeze(0)
+            pos = data.pos.unsqueeze(0)
+            targets = data.q.reshape(-1)
 
             out = model(input, pos).reshape(-1)
 
@@ -147,9 +182,9 @@ def evaluate(device, model, test_dataset, mode):
     if mode == 'T2Q':
         for data in test_loader:
             data = data.to(device)
-            input = data.x.unsqueeze(0)
+            input = data.t.unsqueeze(0)
             pos = data.pos.unsqueeze(0)
-            targets = data.y.reshape(-1)
+            targets = data.q.reshape(-1)
 
             out = model(input, pos).reshape(-1)
 
@@ -169,9 +204,9 @@ def evaluate(device, model, test_dataset, mode):
     elif mode == 'Q2T':
         for data in test_loader:
             data = data.to(device)
-            input = data.y.reshape(1, data.y.shape[0], 1)
+            input = data.q.reshape(1, data.q.shape[0], 1)
             pos = data.pos.unsqueeze(0)
-            targets = data.x.reshape(-1)
+            targets = data.t.reshape(-1)
 
             out = model(input, pos).reshape(-1)
 
@@ -191,9 +226,9 @@ def evaluate(device, model, test_dataset, mode):
     elif mode == 'T2T':
         for data in test_loader:
             data = data.to(device)
-            input = data.x[:, :11].unsqueeze(0)
+            input = data.t[:, :11].unsqueeze(0)
             pos = data.pos.unsqueeze(0)
-            targets = data.x[:, 11:].reshape(-1)
+            targets = data.t[:, 11:].reshape(-1)
 
             out = model(input, pos).reshape(-1)
 
@@ -207,6 +242,28 @@ def evaluate(device, model, test_dataset, mode):
         print(f'Average MSE loss: {np.mean(total_losses)}')
         print(f'Average SSIM loss: {np.mean(total_ssim)}')
         err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F = metrics(test_loader, model, 1.0, 1.0, 1.0, mode='T2T')
+
+        return np.mean(total_losses), np.mean(total_ssim), err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F
+
+    elif mode == 'S2Q':
+        for data in test_loader:
+            data = data.to(device)
+            input = data.surf.unsqueeze(0)
+            pos = data.pos.unsqueeze(0)
+            targets = data.q.reshape(-1)
+
+            out = model(input, pos).reshape(-1)
+
+            loss_var = criterion_func(out, targets).mean(dim=0)
+            loss = loss_var.mean()
+            total_losses.append(loss.item())
+
+            loss_ssim = ssim(out.detach().cpu().numpy(), targets.detach().cpu().numpy())
+            total_ssim.append(loss_ssim)
+
+        print(f'Average MSE loss: {np.mean(total_losses)}')
+        print(f'Average SSIM loss: {np.mean(total_ssim)}')
+        err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F = metrics(test_loader, model, 1.0, 1.0, 1.0, mode='S2Q')
 
         return np.mean(total_losses), np.mean(total_ssim), err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F
 
@@ -228,7 +285,7 @@ def main(device, train_dataset, test_dataset, Net, hparams, path, mode, OOD=Fals
     )
     start = time.time()
 
-    train_loss, Test_loss = 1e5, 1e5
+    train_loss, test_loss = 1e5, 1e5
     pbar_train = tqdm(range(hparams['epochs']), position=0)
     train_loss_list = []
     test_loss_list = []
@@ -238,7 +295,7 @@ def main(device, train_dataset, test_dataset, Net, hparams, path, mode, OOD=Fals
         train_loss_list.append(train_loss)
         del (train_loader)
 
-        test_loader = DataLoader(test_dataset, batch_size=1)
+        test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
         test_loss = test(device, model, test_loader, mode)
         test_loss_list.append(test_loss)
         del (test_loader)
@@ -272,7 +329,7 @@ def main(device, train_dataset, test_dataset, Net, hparams, path, mode, OOD=Fals
     params_model = get_nb_trainable_params(model).astype('float')
     print('Number of parameters:', params_model)
     print('Time elapsed: {0:.2f} seconds'.format(time_elapsed))
-    torch.save(model, path + os.sep + f'model_{hparams["epochs"]}_{mode}.pth')
+    torch.save(model.state_dict(), path + os.sep + f'model_{hparams["epochs"]}_{mode}.pth')
 
     mse_loss, ssim_loss, err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F = evaluate(device, model, test_dataset, mode=mode)
 
