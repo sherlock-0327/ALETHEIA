@@ -338,9 +338,9 @@ class CNOFactorizedMesh3D(nn.Module):
             WNLinear(128, output_dim, wnorm=ff_weight_norm))
 
     def forward(self, x, pos):
-        x = x.reshape(1, self.H, self.W, self.D -1)  # (Batch, size_x, size_y, size_z, channel)
+        x = x.reshape(1, self.H, self.W, self.D, -1)  # (Batch, size_x, size_y, size_z, channel)
         # grid = self.get_grid(x.shape, x.device)
-        grid = pos.reshape(1, self.H, self.W, self.D -1)
+        grid = pos.reshape(1, self.H, self.W, self.D, -1)
         x = torch.cat((x, grid), dim=-1)  # [B, X, Y, Z,  channel + 3]
         x = self.in_proj(x)  # [B, X, Y, Z, H]
         x = x.permute(0, 4, 1, 2, 3)  # [B, H, X, Y, Z]
