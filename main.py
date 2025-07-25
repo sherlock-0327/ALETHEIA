@@ -96,7 +96,7 @@ parser.add_argument("--eval", action="store_true", help="evaluate model or not")
 parser.add_argument("--OOD", action="store_true", help="OOD experiment or not")
 parser.add_argument('--use_surf', action="store_true", help="use surface data or not")
 parser.add_argument("--mode", type=str, default='T2Q', help="different tasks, include T2Q, Q2T and T2T")
-parser.add_argument('--training_time', type=int, default=1, help="The number of training sessions")
+parser.add_argument('--training_num', type=int, default=1, help="The number of training sessions")
 
 args = parser.parse_args()
 print(args)
@@ -193,7 +193,7 @@ if args.eval:
         print("Runtime error when loading model:", e)
     train.evaluate(device, model, test_graphs, mode=args.mode)
 else:
-    for i in range(args.training_time):
+    for i in range(args.training_num):
         try:
             model = get_model(args)
             _ = train.main(device, train_graphs, test_graphs, model, hparams, path, mode=args.mode, OOD=args.OOD)
