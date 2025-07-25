@@ -15,6 +15,61 @@ from model.GeoFNO.FCNO import CNOFactorizedMesh3D as FCNO
 from model.LNO.LNO import LNO, LNO_single, LNO_triple
 from model.DeepONet.deeponet import DeepONet
 
+def get_model(args):
+    if args.model == 'Transolver':
+        model = Transolver(n_hidden=256, n_layers=8, space_dim=3,
+                           fun_dim=args.in_channels,
+                           n_head=8,
+                           mlp_ratio=2, out_dim=args.out_channels,
+                           slice_num=32,
+                           # dropout=0.2,
+                           unified_pos=0)
+    elif args.model == 'Transolver_R':
+        model = Transolver_Structured_Mesh_3D(n_hidden=256, n_layers=8, space_dim=3,
+                                              fun_dim=args.in_channels,
+                                              n_head=8,
+                                              mlp_ratio=2, out_dim=args.out_channels,
+                                              slice_num=32,
+                                              H=20, W=20, D=20,
+                                              # dropout=0.2,
+                                              unified_pos=0)
+    elif args.model == 'FNO3d':
+        model = FNO3d(modes1=12, modes2=12, modes3=8, width=32, in_channels=args.in_channels,
+                      out_channels=args.out_channels, H=20, W=20, D=20)
+    elif args.model == 'GNO':
+        model = GNO(width=32, in_channel=args.in_channels, out_channel=args.out_channels, r=1e-8)
+    elif args.model == 'GeoFNO':
+        model = GeoFNO(modes1=12, modes2=12, modes3=8, width=32, in_channels=args.in_channels,
+                       out_channels=args.out_channels, s=20)
+    elif args.model == 'MLP':
+        model = MLP(in_channels=args.in_channels, out_channels=args.out_channels, hidden_channels=32, n_layers=4,
+                    n_dim=1)
+    elif args.model == 'FFNO':
+        model = FFNO(modes_x=12, modes_y=12, modes_z=8, input_dim=args.in_channels, output_dim=args.out_channels,
+                     width=32, n_layers=4,
+                     share_weight=False, factor=4, n_ff_layers=2, ff_weight_norm=True, layer_norm=False, H=20, W=20,
+                     D=20)
+    elif args.model == 'FFNO-share':
+        model = FFNO(modes_x=12, modes_y=12, modes_z=8, input_dim=args.in_channels, output_dim=args.out_channels,
+                     width=32, n_layers=4,
+                     share_weight=True, factor=4, n_ff_layers=2, ff_weight_norm=True, layer_norm=False, H=20, W=20,
+                     D=20)
+    elif args.model == 'FCNO':
+        model = FCNO(modes_x=12, modes_y=12, modes_z=8, input_dim=args.in_channels, output_dim=args.out_channels,
+                     width=32, n_layers=4,
+                     share_weight=False, factor=4, n_ff_layers=2, ff_weight_norm=True, layer_norm=False, H=20, W=20,
+                     D=20)
+    elif args.model == 'LNO':
+        model_attr = dict()
+        model_attr['time'] = False
+        model = LNO(x_dim=3, y1_dim=args.in_channels, y2_dim=args.out_channels, n_block=4, n_mode=256, n_dim=128,
+                    n_head=8, n_layer=2, attn='Attention_Vanilla', act='GELU', model_attr=model_attr)
+    elif args.model == 'DeepONet':  # Output can only be 1
+        model = DeepONet(branch_dim=3, trunk_dim=args.in_channels, branch_depth=2, trunk_depth=3, width=32)
+    else:
+        raise NotImplementedError("No model type found")
+    return model
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_root', default='/dataset path/')
@@ -41,6 +96,7 @@ parser.add_argument("--eval", action="store_true", help="evaluate model or not")
 parser.add_argument("--OOD", action="store_true", help="OOD experiment or not")
 parser.add_argument('--use_surf', action="store_true", help="use surface data or not")
 parser.add_argument("--mode", type=str, default='T2Q', help="different tasks, include T2Q, Q2T and T2T")
+parser.add_argument('--training_time', type=int, default=1, help="The number of training sessions")
 
 args = parser.parse_args()
 print(args)
@@ -99,53 +155,7 @@ else:
     print("All Freq　Experiment")
     print(f"Dataset size: total={N}, train={len(train_graphs)}, test={len(test_graphs)}")
 
-
-if args.model == 'Transolver':
-    model = Transolver(n_hidden=256, n_layers=8, space_dim=3,
-                       fun_dim=args.in_channels,
-                       n_head=8,
-                       mlp_ratio=2, out_dim=args.out_channels,
-                       slice_num=32,
-                       # dropout=0.2,
-                       unified_pos=0).cuda()
-elif args.model == 'Transolver_R':
-    model = Transolver_Structured_Mesh_3D(n_hidden=256, n_layers=8, space_dim=3,
-                                          fun_dim=args.in_channels,
-                                          n_head=8,
-                                          mlp_ratio=2, out_dim=args.out_channels,
-                                          slice_num=32,
-                                          H=20, W=20, D=20,
-                                          # dropout=0.2,
-                                          unified_pos=0).cuda()
-elif args.model == 'FNO3d':
-    model = FNO3d(modes1=12, modes2=12, modes3=8, width=32, in_channels=args.in_channels, out_channels=args.out_channels, H=20, W=20, D=20)
-elif args.model == 'GNO':
-    model = GNO(width=32, in_channel=args.in_channels, out_channel=args.out_channels, r=1e-8)
-elif args.model == 'GeoFNO':
-    model = GeoFNO(modes1=12, modes2=12, modes3=8, width=32, in_channels=args.in_channels, out_channels=args.out_channels, s=20)
-elif args.model == 'MLP':
-    model = MLP(in_channels=args.in_channels, out_channels=args.out_channels, hidden_channels=32, n_layers=4, n_dim=1)
-elif args.model == 'FFNO':
-    model = FFNO(modes_x=12, modes_y=12, modes_z=8, input_dim=args.in_channels, output_dim=args.out_channels, width=32, n_layers=4,
-                 share_weight=False, factor=4, n_ff_layers=2, ff_weight_norm=True, layer_norm=False, H=20, W=20, D=20)
-elif args.model == 'FFNO-share':
-    model = FFNO(modes_x=12, modes_y=12, modes_z=8, input_dim=args.in_channels, output_dim=args.out_channels, width=32, n_layers=4,
-                 share_weight=True, factor=4, n_ff_layers=2, ff_weight_norm=True, layer_norm=False, H=20, W=20, D=20)
-elif args.model == 'FCNO':
-    model = FCNO(modes_x=12, modes_y=12, modes_z=8, input_dim=args.in_channels, output_dim=args.out_channels, width=32, n_layers=4,
-                 share_weight=False, factor=4, n_ff_layers=2, ff_weight_norm=True, layer_norm=False, H=20, W=20, D=20)
-elif args.model == 'LNO':
-    model_attr = dict()
-    model_attr['time'] = False
-    model = LNO(x_dim=3, y1_dim=args.in_channels, y2_dim=args.out_channels, n_block=4, n_mode=256, n_dim=128,
-                       n_head=8, n_layer=2, attn='Attention_Vanilla', act='GELU', model_attr=model_attr)
-elif args.model == 'DeepONet': # Output can only be 1
-    model = DeepONet(branch_dim=3, trunk_dim=args.in_channels, branch_depth=2, trunk_depth=3, width=32)
-else:
-    raise NotImplementedError("No model type found")
-
-print(f"Model type: {args.model}, Model params: {sum(p.numel() for p in model.parameters())}, Train mode: {args.mode}")
-
+model = get_model(args)
 
 path = f'checkpoints/{args.model}/{args.mode}/'
 
@@ -183,4 +193,12 @@ if args.eval:
         print("Runtime error when loading model:", e)
     train.evaluate(device, model, test_graphs, mode=args.mode)
 else:
-    model = train.main(device, train_graphs, test_graphs, model, hparams, path, mode=args.mode, OOD=args.OOD)
+    for i in range(args.training_time):
+        try:
+            model = get_model(args)
+            _ = train.main(device, train_graphs, test_graphs, model, hparams, path, mode=args.mode, OOD=args.OOD)
+            print(f"Iteration {i} completed")
+        except Exception as e:
+            print(f"Error in iteration {i}: {e}")
+            continue
+    del model
