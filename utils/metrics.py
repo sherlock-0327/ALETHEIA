@@ -496,6 +496,53 @@ def metrics(
 
                 itot += 1
 
+    elif mode == 'S2Q_sp':
+        with torch.no_grad():
+            itot = 0
+            for data in val_loader:
+                data = data.to(device)
+                input = data.surf.reshape(1, data.surf.shape[0], -1)
+                surf_pos = data.surf_pos.reshape(1, data.pos.shape[0], data.pos.shape[1])
+                targets = data.q.reshape(1, data.q.shape[0], 1, -1)
+
+                pred = model(input, surf_pos).reshape(1, data.surf.shape[0], 1, -1)
+
+                (
+                    _err_RMSE,
+                    _err_nRMSE,
+                    _err_CSV,
+                    _err_Max,
+                    _err_BD,
+                    _err_F,
+                ) = metric_func(pred, targets, if_mean=True, Lx=Lx, Ly=Ly, Lz=Lz, initial_step=initial_step)
+
+                if itot == 0:
+                    err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F = (
+                        _err_RMSE,
+                        _err_nRMSE,
+                        _err_CSV,
+                        _err_Max,
+                        _err_BD,
+                        _err_F,
+                    )
+                    val_l2_time = torch.zeros(targets.shape[-2]).to(device)
+                else:
+                    err_RMSE += _err_RMSE
+                    err_nRMSE += _err_nRMSE
+                    err_CSV += _err_CSV
+                    err_Max += _err_Max
+                    err_BD += _err_BD
+                    err_F += _err_F
+
+                    mean_dim = list(range(len(targets.shape) - 2))
+                    mean_dim.append(-1)
+                    mean_dim = tuple(mean_dim)
+                    val_l2_time += torch.sqrt(
+                        torch.mean((pred - targets) ** 2, dim=mean_dim)
+                    )
+
+                itot += 1
+
     err_RMSE = np.array(err_RMSE.data.cpu() / itot)
     err_nRMSE = np.array(err_nRMSE.data.cpu() / itot)
     err_CSV = np.array(err_CSV.data.cpu() / itot)

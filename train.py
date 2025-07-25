@@ -103,6 +103,27 @@ def train(device, model, train_loader, optimizer, scheduler, mode):
 
             total_losses.append(loss.item())
 
+    elif mode == 'S2Q_sp':
+        for data in train_loader:
+            data = data.to(device)
+            optimizer.zero_grad()
+
+            input = data.surf.reshape(1, data.surf.shape[0], -1)
+            surf_pos = data.surf_pos.unsqueeze(0)
+            targets = data.q.reshape(-1)
+
+            out = model(input, surf_pos).reshape(-1)
+
+            loss_var = criterion_func(out, targets).mean(dim=0)
+            loss = loss_var.mean()
+
+            loss.backward()
+
+            optimizer.step()
+            scheduler.step()
+
+            total_losses.append(loss.item())
+
     return np.mean(total_losses)
 
 
@@ -162,6 +183,20 @@ def test(device, model, test_loader, mode):
             targets = data.q.reshape(-1)
 
             out = model(input, pos).reshape(-1)
+
+            loss_var = criterion_func(out, targets).mean(dim=0)
+            loss = loss_var.mean()
+
+            total_losses.append(loss.item())
+
+    elif mode == 'S2Q_sp':
+        for data in test_loader:
+            data = data.to(device)
+            input = data.surf.unsqueeze(0)
+            surf_pos = data.surf_pos.unsqueeze(0)
+            targets = data.q.reshape(-1)
+
+            out = model(input, surf_pos).reshape(-1)
 
             loss_var = criterion_func(out, targets).mean(dim=0)
             loss = loss_var.mean()
@@ -267,6 +302,28 @@ def evaluate(device, model, test_dataset, mode):
 
         return np.mean(total_losses), np.mean(total_ssim), err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F
 
+    elif mode == 'S2Q_sp':
+        for data in test_loader:
+            data = data.to(device)
+            input = data.surf.unsqueeze(0)
+            surf_pos = data.surf_pos.unsqueeze(0)
+            targets = data.q.reshape(-1)
+
+            out = model(input, surf_pos).reshape(-1)
+
+            loss_var = criterion_func(out, targets).mean(dim=0)
+            loss = loss_var.mean()
+            total_losses.append(loss.item())
+
+            loss_ssim = ssim(out.detach().cpu().numpy(), targets.detach().cpu().numpy())
+            total_ssim.append(loss_ssim)
+
+        print(f'Average MSE loss: {np.mean(total_losses)}')
+        print(f'Average SSIM loss: {np.mean(total_ssim)}')
+        err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F = metrics(test_loader, model, 1.0, 1.0, 1.0, mode='S2Q_sp')
+
+        return np.mean(total_losses), np.mean(total_ssim), err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F
+
 class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, np.ndarray):
@@ -327,7 +384,7 @@ def main(device, train_dataset, test_dataset, Net, hparams, path, mode, OOD=Fals
     end = time.time()
     time_elapsed = end - start
     params_model = get_nb_trainable_params(model).astype('float')
-    print('Number of parameters:', params_model)
+    # print('Number of parameters:', params_model)
     print('Time elapsed: {0:.2f} seconds'.format(time_elapsed))
     torch.save(model.state_dict(), path + os.sep + f'model_{hparams["epochs"]}_{mode}.pth')
 

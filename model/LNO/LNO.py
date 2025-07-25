@@ -239,7 +239,7 @@ class LNO(torch.nn.Module):
             module.weight.data.fill_(1.0)
             module.bias.data.zero_()
 
-    def forward(self, x, y):
+    def forward(self, y, x): # x: position, y: input
         x = self.trunk_projector(x)
         y = self.branch_projector(y)
 

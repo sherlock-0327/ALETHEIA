@@ -72,7 +72,7 @@ class SpectralConv3d(nn.Module):
 
 
 class FNO3d(nn.Module):
-    def __init__(self, modes1, modes2, modes3, width, in_channels, out_channels):
+    def __init__(self, modes1, modes2, modes3, width, in_channels, out_channels, H, W, D):
         super(FNO3d, self).__init__()
 
         """
@@ -91,6 +91,9 @@ class FNO3d(nn.Module):
         self.modes1 = modes1
         self.modes2 = modes2
         self.modes3 = modes3
+        self.H = H
+        self.W = W
+        self.D = D
         self.width = width
         self.padding = 5  # pad the domain if input is non-periodic
         self.fc0 = nn.Linear(in_channels + 3, self.width)
@@ -113,8 +116,9 @@ class FNO3d(nn.Module):
         self.fc2 = nn.Linear(128, out_channels)
 
     def forward(self, x, pos):
-        x = x.reshape(1, 20, 20, 20, x.shape[-1]) # (Batch, size_x, size_y, size_z, channel)
-        grid = self.get_grid(x.shape, x.device)
+        x = x.reshape(1, self.H, self.W, self.D, -1) # (Batch, size_x, size_y, size_z, channel)
+        # grid = self.get_grid(x.shape, x.device)
+        grid = pos.reshape(1, self.H, self.W, self.D, -1)
         x = torch.cat((x, grid), dim=-1)
         x = self.fc0(x)
         x = x.permute(0, 4, 1, 2, 3)

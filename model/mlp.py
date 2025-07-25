@@ -23,11 +23,11 @@ class MLP(nn.Module):
     dropout : float, default is 0
         if > 0, dropout probability
     """
-    def __init__(self, in_channels, out_channels=None, hidden_channels=None, 
+    def __init__(self, in_channels, out_channels=None, pos_emb=3, hidden_channels=None,
                  n_layers=2, n_dim=2, non_linearity=F.gelu, dropout=0., **kwargs):
         super().__init__()
         self.n_layers = n_layers
-        self.in_channels = in_channels
+        self.in_channels = in_channels + pos_emb
         self.out_channels = in_channels if out_channels is None else out_channels
         self.hidden_channels = in_channels if hidden_channels is None else hidden_channels 
         self.non_linearity = non_linearity
@@ -44,6 +44,7 @@ class MLP(nn.Module):
                 self.fcs.append(Conv(self.hidden_channels, self.hidden_channels, 1))
 
     def forward(self, x, pos):
+        x = torch.cat((x, pos), dim=-1)
         x = x.permute(0, 2, 1)
         for i, fc in enumerate(self.fcs):
             x = fc(x)

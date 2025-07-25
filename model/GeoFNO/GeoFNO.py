@@ -430,10 +430,10 @@ class GeoFNO(BaseModel):
             x_in = u
         if self.is_mesh and x_out == None:
             x_out = u
-        grid = self.get_grid([u.shape[0], self.s1, self.s2, self.s3], u.device).permute(
-            0, 4, 1, 2, 3
-        )
-        # grid = pos.reshape(u.shape[0], 3, self.s1, self.s2, self.s3)
+        # grid = self.get_grid([u.shape[0], self.s1, self.s2, self.s3], u.device).permute(
+        #     0, 4, 1, 2, 3
+        # )
+        grid = pos.reshape(1, 3, self.s1, self.s2, self.s3)
 
         u = self.fc0(u)
         u = u.permute(0, 2, 1)

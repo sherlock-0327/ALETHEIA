@@ -166,15 +166,15 @@ class Model(nn.Module):
             reshape(batchsize, size_x, size_y, size_z, self.ref * self.ref * self.ref).contiguous()
         return pos
 
-    def forward(self, x, fx, T=None):
+    def forward(self, fx, pos, T=None):
         if self.unified_pos:
-            x = self.pos.repeat(x.shape[0], 1, 1, 1, 1).reshape(x.shape[0], self.H * self.W * self.D,
+            pos = self.pos.repeat(pos.shape[0], 1, 1, 1, 1).reshape(pos.shape[0], self.H * self.W * self.D,
                                                                 self.ref * self.ref * self.ref)
         if fx is not None:
-            fx = torch.cat((x, fx), -1)
+            fx = torch.cat((pos, fx), -1)
             fx = self.preprocess(fx)
         else:
-            fx = self.preprocess(x)
+            fx = self.preprocess(pos)
             fx = fx + self.placeholder[None, None, :]
 
         if T is not None:

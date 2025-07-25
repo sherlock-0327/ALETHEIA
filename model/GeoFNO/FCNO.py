@@ -292,7 +292,7 @@ class SpectralConv2d(nn.Module):
 class CNOFactorizedMesh3D(nn.Module):
     def __init__(self, modes_x, modes_y, modes_z, width, input_dim, output_dim,
                  n_layers, share_weight, factor, ff_weight_norm, n_ff_layers,
-                 layer_norm):
+                 layer_norm, H, W, D):
         super().__init__()
         self.padding = 8  # pad the domain if input is non-periodic
         self.modes_x = modes_x
@@ -303,6 +303,9 @@ class CNOFactorizedMesh3D(nn.Module):
         self.output_dim = output_dim
         self.in_proj = WNLinear(input_dim + 3, self.width, wnorm=ff_weight_norm)
         self.n_layers = n_layers
+        self.H = H
+        self.W = W
+        self.D = D
 
         self.fourier_weight = None
         if share_weight:
@@ -335,8 +338,9 @@ class CNOFactorizedMesh3D(nn.Module):
             WNLinear(128, output_dim, wnorm=ff_weight_norm))
 
     def forward(self, x, pos):
-        x = x.reshape(1, 20, 20, 20, x.shape[-1])  # (Batch, size_x, size_y, size_z, channel)
-        grid = self.get_grid(x.shape, x.device)
+        x = x.reshape(1, self.H, self.W, self.D -1)  # (Batch, size_x, size_y, size_z, channel)
+        # grid = self.get_grid(x.shape, x.device)
+        grid = pos.reshape(1, self.H, self.W, self.D -1)
         x = torch.cat((x, grid), dim=-1)  # [B, X, Y, Z,  channel + 3]
         x = self.in_proj(x)  # [B, X, Y, Z, H]
         x = x.permute(0, 4, 1, 2, 3)  # [B, H, X, Y, Z]
