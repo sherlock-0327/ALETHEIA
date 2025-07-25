@@ -390,22 +390,32 @@ def main(device, train_dataset, test_dataset, Net, hparams, path, mode, OOD=Fals
 
     mse_loss, ssim_loss, err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F = evaluate(device, model, test_dataset, mode=mode)
 
-    with open(path + os.sep + f'log_{hparams["epochs"]}_{mode}.json', 'a') as f:
-        json.dump(
-            {
-                'nb_parameters': params_model,
-                'time_elapsed': time_elapsed,
-                'hparams': hparams,
-                'train_loss': train_loss,
-                'test_loss': test_loss,
-                'ssim_loss': ssim_loss,
-                'RMSE': err_RMSE,
-                'normalized RMSE': err_nRMSE,
-                'RMSE of conserved variables': err_CSV,
-                'Maximum value of rms error': err_Max,
-                'RMSE at boundaries': err_BD,
-                'RMSE in Fourier space': err_F,
-            }, f, indent=12, cls=NumpyEncoder
-        )
+    if os.path.exists(path + os.sep + f'log_{hparams["epochs"]}_{mode}.json'):
+        with open(path + os.sep + f'log_{hparams["epochs"]}_{mode}.json', 'r') as f:
+            try:
+                data = json.load(f)
+                if not isinstance(data, list):
+                    data = [data]  # 如果原来是单个对象，转换为列表
+            except json.JSONDecodeError:
+                data = []
+    else:
+        data = []
+    new_entry = {
+        'nb_parameters': params_model,
+        'time_elapsed': time_elapsed,
+        'hparams': hparams,
+        'train_loss': train_loss,
+        'test_loss': test_loss,
+        'ssim_loss': ssim_loss,
+        'RMSE': err_RMSE,
+        'normalized RMSE': err_nRMSE,
+        'RMSE of conserved variables': err_CSV,
+        'Maximum value of rms error': err_Max,
+        'RMSE at boundaries': err_BD,
+        'RMSE in Fourier space': err_F,
+    }
+    data.append(new_entry)
+    with open(path + os.sep + f'log_{hparams["epochs"]}_{mode}.json', 'w') as f:
+        json.dump(data, f, indent=12, cls=NumpyEncoder)
 
     return model
