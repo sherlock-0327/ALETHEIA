@@ -133,7 +133,7 @@ elif args.model == 'FFNO-share':
                  share_weight=True, factor=4, n_ff_layers=2, ff_weight_norm=True, layer_norm=False, H=20, W=20, D=20)
 elif args.model == 'FCNO':
     model = FCNO(modes_x=12, modes_y=12, modes_z=8, input_dim=args.in_channels, output_dim=args.out_channels, width=32, n_layers=4,
-                 share_weight=False, factor=4, n_ff_layers=2, ff_weight_norm=True, layer_norm=False)
+                 share_weight=False, factor=4, n_ff_layers=2, ff_weight_norm=True, layer_norm=False, H=20, W=20, D=20)
 elif args.model == 'LNO':
     model_attr = dict()
     model_attr['time'] = False
