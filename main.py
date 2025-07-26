@@ -156,6 +156,7 @@ else:
     print(f"Dataset size: total={N}, train={len(train_graphs)}, test={len(test_graphs)}")
 
 model = get_model(args)
+print(f'Model: {args.model}')
 
 path = f'checkpoints/{args.model}/{args.mode}/'
 
