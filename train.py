@@ -3,6 +3,7 @@ import time, json, os
 import torch
 import torch.nn as nn
 
+from torch.utils.data import RandomSampler
 from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -346,16 +347,22 @@ def main(device, train_dataset, test_dataset, Net, hparams, path, mode, OOD=Fals
     pbar_train = tqdm(range(hparams['epochs']), position=0)
     train_loss_list = []
     test_loss_list = []
+
+    sampler = RandomSampler(train_dataset, replacement=False)
+    train_loader = DataLoader(train_dataset, sampler=sampler, batch_size=hparams['batch_size'], drop_last=True)
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+
     for epoch in pbar_train:
-        train_loader = DataLoader(train_dataset, batch_size=hparams['batch_size'], shuffle=True, drop_last=True)
+        # train_loader = DataLoader(train_dataset, batch_size=hparams['batch_size'], shuffle=True, drop_last=True)
+        sampler.generator = torch.Generator().manual_seed(epoch)
         train_loss = train(device, model, train_loader, optimizer, lr_scheduler, mode)
         train_loss_list.append(train_loss)
-        del (train_loader)
+        # del (train_loader)
 
-        test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+        # test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
         test_loss = test(device, model, test_loader, mode)
         test_loss_list.append(test_loss)
-        del (test_loader)
+        # del (test_loader)
 
         if epoch % 5 == 0:
             plt.plot(train_loss_list, label='Train Loss')

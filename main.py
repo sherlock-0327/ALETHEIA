@@ -14,6 +14,7 @@ from model.GeoFNO.FFNO import FNOFactorizedMesh3D as FFNO
 from model.GeoFNO.FCNO import CNOFactorizedMesh3D as FCNO
 from model.LNO.LNO import LNO, LNO_single, LNO_triple
 from model.DeepONet.deeponet import DeepONet
+from model.FEM import FEMHeatSolver
 
 def get_model(args):
     if args.model == 'Transolver':
@@ -64,8 +65,15 @@ def get_model(args):
         model_attr['time'] = False
         model = LNO(x_dim=3, y1_dim=args.in_channels, y2_dim=args.out_channels, n_block=4, n_mode=256, n_dim=128,
                     n_head=8, n_layer=2, attn='Attention_Vanilla', act='GELU', model_attr=model_attr)
+    elif args.model == 'LNO_single':
+        model_attr = dict()
+        model_attr['time'] = False
+        model = LNO_single(x_dim=None, y1_dim=args.in_channels, y2_dim=args.out_channels, n_block=4, n_mode=256, n_dim=128,
+                           n_head=8, n_layer=2, attn='Attention_Vanilla', act='GELU', model_attr=model_attr)
     elif args.model == 'DeepONet':  # Output can only be 1
         model = DeepONet(branch_dim=3, trunk_dim=args.in_channels, branch_depth=2, trunk_depth=3, width=32)
+    elif args.model == 'FEM':
+        model = FEMHeatSolver(mode=args.mode, num_time_steps=args.out_channels, num_points=args.downsample_count)
     else:
         raise NotImplementedError("No model type found")
     return model
@@ -132,9 +140,9 @@ if args.OOD:
             continue
         train_graphs.extend(block[:split])
         test_graphs.extend(block[split:])
-
-    print("OOD　Experiment")
     print(f"Dataset size: total={N}, train={len(train_graphs)}, test={len(test_graphs)}")
+    print("OOD　Experiment")
+
 else:
     all_graphs, stats = load_all_data(
         args.data_root,
@@ -152,14 +160,13 @@ else:
     split = int((1 - args.test_split) * N)
     train_graphs = all_graphs[:split]
     test_graphs = all_graphs[split:]
-    print("All Freq　Experiment")
     print(f"Dataset size: total={N}, train={len(train_graphs)}, test={len(test_graphs)}")
+    print("All Freq　Experiment")
 
 model = get_model(args)
-print(f'Model: {args.model}')
+print(f'Model: {args.model}, Training Type:{args.mode}')
 
 path = f'checkpoints/{args.model}/{args.mode}/'
-
 if args.data_type == 'unstructured_data':
     path = f'checkpoints/{args.model}/{args.mode}_uns/'
     if args.OOD:
@@ -202,4 +209,3 @@ else:
         except Exception as e:
             print(f"Error in iteration {i}: {e}")
             continue
-    del model
