@@ -157,6 +157,24 @@ import einops
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+def to_packed(data, device, fields=("pos","t","q"), squeeze_1d=True, non_blocking=True):
+    data = data.to(device, non_blocking=non_blocking)
+
+    B = int(data.num_graphs)
+    sizes = (data.ptr[1:] - data.ptr[:-1]).to(torch.long)
+    N = int(sizes[0])
+    if not torch.all(sizes.eq(N)):
+        raise RuntimeError(f"Each graph must have same #nodes, got {sizes.tolist()}")
+
+    outs = []
+    for name in fields:
+        x = getattr(data, name)
+        feat_shape = x.shape[1:]
+        x = x.view(B, N, *feat_shape)
+        if squeeze_1d and len(feat_shape)==1 and feat_shape[0]==1:
+            x = x.squeeze(-1)
+        outs.append(x)
+    return outs[0] if len(outs)==1 else tuple(outs)
 
 def metric_func(pred, target, if_mean=True, Lx=1.0, Ly=1.0, Lz=1.0, iLow=4, iHigh=12, initial_step=1):
     """
@@ -316,12 +334,13 @@ def metrics(
             itot = 0
             for data in val_loader:
                 data = data.to(device)
-                input = data.t.unsqueeze(0)
-                pos = data.pos.unsqueeze(0)
-                targets = data.q.reshape(1, -1, 1, 1)
 
-                pred = model(input, pos).reshape(1, -1, 1, 1)
+                pos, t, q = to_packed(data, device=device, fields=('pos', 't', 'q'), squeeze_1d=False,
+                                      non_blocking=True)
+                input = t
+                targets = q.reshape(1,-1,1,1)
 
+                pred = model(input, pos).reshape(1,-1,1,1)
                 (
                     _err_RMSE,
                     _err_nRMSE,
@@ -362,12 +381,13 @@ def metrics(
             itot = 0
             for data in val_loader:
                 data = data.to(device)
-                input = data.q.reshape(1, data.q.shape[0], -1)
-                pos = data.pos.reshape(1, data.pos.shape[0], data.pos.shape[1])
-                targets = data.t.reshape(1, data.t.shape[0], 1, data.t.shape[1])
 
-                pred = model(input, pos).reshape(1, data.t.shape[0], 1, data.t.shape[1])
+                pos, t, q = to_packed(data, device=device, fields=('pos', 't', 'q'), squeeze_1d=False,
+                                      non_blocking=True)
+                input = q
+                targets = t.reshape(1,-1,13,1)
 
+                pred = model(input, pos).reshape(1,-1,13,1)
                 (
                     _err_RMSE,
                     _err_nRMSE,
@@ -408,12 +428,12 @@ def metrics(
             itot = 0
             for data in val_loader:
                 data = data.to(device)
-                input = data.t[:, :11].reshape(1, data.t.shape[0], -1)
-                pos = data.pos.reshape(1, data.pos.shape[0], data.pos.shape[1])
-                targets = data.t[:, 11:].reshape(1, data.t.shape[0], 1, -1)
+                pos, t, q = to_packed(data, device=device, fields=('pos', 't', 'q'), squeeze_1d=False,
+                                      non_blocking=True)
+                input = t[:, :, :11]
+                targets = t[:, :, 11:].reshape(1,-1,2,1)
 
-                pred = model(input, pos).reshape(1, data.t.shape[0], 1, -1)
-
+                pred = model(input, pos).reshape(1,-1,2,1)
                 (
                     _err_RMSE,
                     _err_nRMSE,
@@ -454,12 +474,13 @@ def metrics(
             itot = 0
             for data in val_loader:
                 data = data.to(device)
-                input = data.surf.reshape(1, data.surf.shape[0], -1)
-                pos = data.pos.reshape(1, data.pos.shape[0], data.pos.shape[1])
-                targets = data.q.reshape(1, data.q.shape[0], 1, -1)
 
-                pred = model(input, pos).reshape(1, data.surf.shape[0], 1, -1)
+                pos, t, q, surf, surf_pos = to_packed(data, device=device, fields=('pos', 't', 'q', 'surf', 'surf_pos'), squeeze_1d=False,
+                                            non_blocking=True)
+                input = surf
+                targets = q.reshape(1,-1,1,1)
 
+                pred = model(input, pos, surf_pos).reshape(1,-1,1,1)
                 (
                     _err_RMSE,
                     _err_nRMSE,
@@ -501,12 +522,13 @@ def metrics(
             itot = 0
             for data in val_loader:
                 data = data.to(device)
-                input = data.surf.reshape(1, data.surf.shape[0], -1)
-                surf_pos = data.surf_pos.reshape(1, data.pos.shape[0], data.pos.shape[1])
-                targets = data.q.reshape(1, data.q.shape[0], 1, -1)
 
-                pred = model(input, surf_pos).reshape(1, data.surf.shape[0], 1, -1)
+                pos, t, q, surf, surf_pos = to_packed(data, device=device, fields=('pos', 't', 'q', 'surf', 'surf_pos'), squeeze_1d=False,
+                                            non_blocking=True)
+                input = surf
+                targets = q.reshape(1,-1,1,1)
 
+                pred = model(input, surf_pos).reshape(1,-1,1,1)
                 (
                     _err_RMSE,
                     _err_nRMSE,

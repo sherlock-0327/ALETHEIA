@@ -27,7 +27,7 @@ class DeepONet(StructureNN):
         self.params = self.__init_params()
         self.__initialize()
         
-    def forward(self, x, pos):
+    def forward(self, x, pos, surf_pos=None):
         # x_branch, x_trunk = x[..., :self.branch_dim], x[..., self.branch_dim:]
         x_branch, x_trunk = pos, x
         x_branch = self.modus['Branch'](x_branch)

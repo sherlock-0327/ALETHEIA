@@ -418,7 +418,7 @@ class GeoFNO(BaseModel):
 
         self.iphi = IPHI(in_channels=in_channels, width=3*in_channels)
 
-    def forward(self, u, pos, code=None, x_in=None, x_out=None):
+    def forward(self, u, pos, surf_pos=None, code=None, x_in=None, x_out=None):
         # u (batch, Nx, d) the input value
         # code (batch, Nx, d) the input features
         # x_in (batch, Nx, 2) the input mesh (sampling mesh)
@@ -426,6 +426,7 @@ class GeoFNO(BaseModel):
         # x_in (batch, Nx, 2) the input mesh (query mesh)
 
         # u = self.fc_3dto2d(u)
+        B, N, C = u.shape
         if self.is_mesh and x_in == None:
             x_in = u
         if self.is_mesh and x_out == None:
@@ -433,7 +434,7 @@ class GeoFNO(BaseModel):
         # grid = self.get_grid([u.shape[0], self.s1, self.s2, self.s3], u.device).permute(
         #     0, 4, 1, 2, 3
         # )
-        grid = pos.reshape(1, 3, self.s1, self.s2, self.s3)
+        grid = pos.reshape(B, 3, self.s1, self.s2, self.s3)
 
         u = self.fc0(u)
         u = u.permute(0, 2, 1)
@@ -470,7 +471,7 @@ class GeoFNO(BaseModel):
         u = self.fc1(u)
         u = F.gelu(u)
         u = self.fc2(u)
-        return u.squeeze(-1)
+        return u
 
     def get_grid(self, shape, device):
         batchsize, size_x, size_y, size_z = shape[0], shape[1], shape[2], shape[3]

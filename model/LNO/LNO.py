@@ -69,7 +69,7 @@ class LinearAttention_Galerkin_and_Fourier(torch.nn.Module):
 
         self.to_out = torch.nn.Sequential(
             torch.nn.Linear(self.n_dim, self.n_dim),
-            torch.nn.Dropout(0.0)
+            torch.nn.Dropout(0.1)
         ) if self.project_out else torch.nn.Identity()
 
     def norm_wrt_domain(self, x, norm_fn):
@@ -130,6 +130,10 @@ class MLP(torch.nn.Module):
         r = self.output(r)
         return r
 
+def Attention_Vanilla(q, k, v):
+    score = torch.softmax(torch.einsum("bhic,bhjc->bhij", q, k) / math.sqrt(k.shape[-1]), dim=-1)
+    r = torch.einsum("bhij,bhjc->bhic", score, v)
+    return r
 
 class LNO(torch.nn.Module):
     class SelfAttention(torch.nn.Module):
@@ -144,6 +148,8 @@ class LNO(torch.nn.Module):
             self.attn = attn
             self.proj = torch.nn.Linear(self.n_dim, self.n_dim)
 
+            self.last_attn = None
+
         def forward(self, x):
             B, N, D = x.size()
             q = self.Wq(x).view(B, N, self.n_head, D // self.n_head).permute(0, 2, 1, 3)
@@ -151,6 +157,10 @@ class LNO(torch.nn.Module):
             v = self.Wv(x).view(B, N, self.n_head, D // self.n_head).permute(0, 2, 1, 3)
             r = self.attn(q, k, v).permute(0, 2, 1, 3).contiguous().view(B, N, D)
             r = self.proj(r)
+
+            if not self.training:
+                self.last_attn = self.last_attn = torch.softmax(torch.einsum("bhic,bhjc->bhij", q, k) / math.sqrt(k.shape[-1]), dim=-1)
+
             return r
 
     class CrossAttention(torch.nn.Module):
@@ -188,13 +198,13 @@ class LNO(torch.nn.Module):
                 self.self_attn = LinearAttention_Galerkin_and_Fourier('galerkin', self.n_dim, self.n_head, use_ln=True)
             elif self.attn == "Nystrom":
                 self.self_attn = NystromAttention(self.n_dim, heads=self.n_head, dim_head=self.n_dim // self.n_head,
-                                                  dropout=0.0)
+                                                  dropout=0.1)
             else:
                 self.self_attn = LNO.SelfAttention(self.n_mode, self.n_dim, self.n_head, ATTENTION[self.attn])
 
             self.ln1 = torch.nn.LayerNorm(self.n_dim)
             self.ln2 = torch.nn.LayerNorm(self.n_dim)
-            self.drop = torch.nn.Dropout(0.0)
+            self.drop = torch.nn.Dropout(0.1)
 
             self.mlp = torch.nn.Sequential(
                 torch.nn.Linear(self.n_dim, self.n_dim * 2),
@@ -230,6 +240,11 @@ class LNO(torch.nn.Module):
         self.attn_blocks = torch.nn.Sequential(
             *[LNO.AttentionBlock(self.n_mode, self.n_dim, self.n_head, attn, self.act) for _ in range(0, self.n_block)])
 
+        self.last_score_encode = None  # B N M
+        self.last_score_decode = None  # B N M
+        self.last_attn_tokens = None
+
+
     def _init_weights(self, module):
         if isinstance(module, (torch.nn.Linear, torch.nn.Embedding)):
             module.weight.data.normal_(mean=0.0, std=0.0002)
@@ -239,7 +254,7 @@ class LNO(torch.nn.Module):
             module.weight.data.fill_(1.0)
             module.bias.data.zero_()
 
-    def forward(self, y, x): # x: position, y: input
+    def forward(self, y, x, surf_pos=None): # x: position, y: input
         x = self.trunk_projector(x)
         y = self.branch_projector(y)
 
@@ -251,6 +266,12 @@ class LNO(torch.nn.Module):
 
         for block in self.attn_blocks:
             z = block(z)
+
+        if not self.training:
+            self.last_score_encode = score_encode.detach()
+            self.last_score_decode = score_decode.detach()
+            last_block = self.attn_blocks[-1]
+            self.last_attn_tokens = last_block.self_attn.last_attn.detach()
 
         r = torch.einsum("bij,bjc->bic", score_decode, z)
         r = self.out_mlp(r)
@@ -291,7 +312,7 @@ class LNO_single(torch.nn.Module):
             self.self_attn = LNO_single.SelfAttention(self.n_mode, self.n_dim, self.n_head, self.attn)
             self.ln1 = torch.nn.LayerNorm(self.n_dim)
             self.ln2 = torch.nn.LayerNorm(self.n_dim)
-            self.drop = torch.nn.Dropout(0.0)
+            self.drop = torch.nn.Dropout(0.1)
 
             self.mlp = torch.nn.Sequential(
                 torch.nn.Linear(self.n_dim, self.n_dim * 2),
@@ -339,7 +360,7 @@ class LNO_single(torch.nn.Module):
             module.weight.data.fill_(1.0)
             module.bias.data.zero_()
 
-    def forward(self, x, pos):
+    def forward(self, x, pos, surf_pos=None):
         y = x
         y = self.in_mlp(y)
         weight = torch.softmax(self.Wm(y), dim=-1)
@@ -411,13 +432,13 @@ class LNO_triple(torch.nn.Module):
                 self.self_attn = LinearAttention_Galerkin_and_Fourier('galerkin', self.n_dim, self.n_head, use_ln=True)
             elif self.attn == "Nystrom":
                 self.self_attn = NystromAttention(self.n_dim, heads=self.n_head, dim_head=self.n_dim // self.n_head,
-                                                  dropout=0.0)
+                                                  dropout=0.1)
             else:
                 self.self_attn = LNO.SelfAttention(self.n_mode, self.n_dim, self.n_head, ATTENTION[self.attn])
 
             self.ln1 = torch.nn.LayerNorm(self.n_dim)
             self.ln2 = torch.nn.LayerNorm(self.n_dim)
-            self.drop = torch.nn.Dropout(0.0)
+            self.drop = torch.nn.Dropout(0.1)
 
             self.mlp = torch.nn.Sequential(
                 torch.nn.Linear(self.n_dim, self.n_dim * 2),
@@ -463,7 +484,7 @@ class LNO_triple(torch.nn.Module):
             module.weight.data.fill_(1.0)
             module.bias.data.zero_()
 
-    def forward(self, y, x): # x: position, y: input
+    def forward(self, y, x, surf_pos=None): # x: position, y: input
         y = self.branch_projector(y)
         x = self.trunk_projector(x)
 

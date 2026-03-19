@@ -7,8 +7,26 @@ from torch.utils.data import RandomSampler
 from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-from skimage.metrics import structural_similarity as ssim
+from utils.ssim import point_ssim
 
+def to_packed(data, device, fields=("pos","t","q"), squeeze_1d=True, non_blocking=True):
+    data = data.to(device, non_blocking=non_blocking)
+
+    B = int(data.num_graphs)
+    sizes = (data.ptr[1:] - data.ptr[:-1]).to(torch.long)
+    N = int(sizes[0])
+    if not torch.all(sizes.eq(N)):
+        raise RuntimeError(f"Each graph must have same #nodes, got {sizes.tolist()}")
+
+    outs = []
+    for name in fields:
+        x = getattr(data, name)
+        feat_shape = x.shape[1:]
+        x = x.view(B, N, *feat_shape)
+        if squeeze_1d and len(feat_shape)==1 and feat_shape[0]==1:
+            x = x.squeeze(-1)
+        outs.append(x)
+    return outs[0] if len(outs)==1 else tuple(outs)
 
 def get_nb_trainable_params(model):
     '''
@@ -17,6 +35,7 @@ def get_nb_trainable_params(model):
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())
     return sum([np.prod(p.size()) for p in model_parameters])
 
+
 def train(device, model, train_loader, optimizer, scheduler, mode):
     model.train()
 
@@ -24,14 +43,13 @@ def train(device, model, train_loader, optimizer, scheduler, mode):
     total_losses = []
     if mode == 'T2Q':
         for data in train_loader:
-            data = data.to(device)
+            pos, t, q = to_packed(data, device=device, fields=('pos', 't', 'q'), squeeze_1d=False, non_blocking=True)
             optimizer.zero_grad()
 
-            input = data.t.unsqueeze(0)
-            pos = data.pos.unsqueeze(0)
-            targets = data.q.reshape(-1)
+            input = t
+            targets = q
 
-            out = model(input, pos).reshape(-1)
+            out = model(input, pos)
 
             loss_var = criterion_func(out, targets).mean(dim=0)
             loss = loss_var.mean()
@@ -42,16 +60,16 @@ def train(device, model, train_loader, optimizer, scheduler, mode):
             scheduler.step()
 
             total_losses.append(loss.item())
+
     elif mode == 'Q2T':
         for data in train_loader:
-            data = data.to(device)
+            pos, t, q = to_packed(data, device=device, fields=('pos', 't', 'q'), squeeze_1d=False, non_blocking=True)
             optimizer.zero_grad()
 
-            input = data.q.reshape(1, data.q.shape[0], -1)
-            pos = data.pos.unsqueeze(0)
-            targets = data.t.reshape(-1)
+            input = q
+            targets = t
 
-            out = model(input, pos).reshape(-1)
+            out = model(input, pos)
 
             loss_var = criterion_func(out, targets).mean(dim=0)
             loss = loss_var.mean()
@@ -62,16 +80,16 @@ def train(device, model, train_loader, optimizer, scheduler, mode):
             scheduler.step()
 
             total_losses.append(loss.item())
+
     elif mode == 'T2T':
         for data in train_loader:
-            data = data.to(device)
+            pos, t, q = to_packed(data, device=device, fields=('pos', 't', 'q'), squeeze_1d=False, non_blocking=True)
             optimizer.zero_grad()
 
-            input = data.t[:, :11].reshape(1, data.t.shape[0], -1)
-            pos = data.pos.unsqueeze(0)
-            targets = data.t[:, 11:].reshape(-1)
+            input = t[:, :, :11]
+            targets = t[:, :, 11:]
 
-            out = model(input, pos).reshape(-1)
+            out = model(input, pos)
 
             loss_var = criterion_func(out, targets).mean(dim=0)
             loss = loss_var.mean()
@@ -85,35 +103,13 @@ def train(device, model, train_loader, optimizer, scheduler, mode):
 
     elif mode == 'S2Q':
         for data in train_loader:
-            data = data.to(device)
+            pos, t, q, surf, surf_pos = to_packed(data, device=device, fields=('pos', 't', 'q', 'surf', 'surf_pos'), squeeze_1d=False, non_blocking=True)
             optimizer.zero_grad()
 
-            input = data.surf.reshape(1, data.surf.shape[0], -1)
-            pos = data.pos.unsqueeze(0)
-            targets = data.q.reshape(-1)
+            input = surf
+            targets = q
 
-            out = model(input, pos).reshape(-1)
-
-            loss_var = criterion_func(out, targets).mean(dim=0)
-            loss = loss_var.mean()
-
-            loss.backward()
-
-            optimizer.step()
-            scheduler.step()
-
-            total_losses.append(loss.item())
-
-    elif mode == 'S2Q_sp':
-        for data in train_loader:
-            data = data.to(device)
-            optimizer.zero_grad()
-
-            input = data.surf.reshape(1, data.surf.shape[0], -1)
-            surf_pos = data.surf_pos.unsqueeze(0)
-            targets = data.q.reshape(-1)
-
-            out = model(input, surf_pos).reshape(-1)
+            out = model(input, pos, surf_pos)
 
             loss_var = criterion_func(out, targets).mean(dim=0)
             loss = loss_var.mean()
@@ -137,193 +133,157 @@ def test(device, model, test_loader, mode):
     total_ssim = []
     if mode == 'T2Q':
         for data in test_loader:
-            data = data.to(device)
-            input = data.t.unsqueeze(0)
-            pos = data.pos.unsqueeze(0)
-            targets = data.q.reshape(-1)
+            pos, t, q = to_packed(data, device=device, fields=('pos', 't', 'q'), squeeze_1d=False, non_blocking=True)
+            input = t
+            targets = q
 
-            out = model(input, pos).reshape(-1)
+            out = model(input, pos)
 
             loss_var = criterion_func(out, targets).mean(dim=0)
             loss = loss_var.mean()
             total_losses.append(loss.item())
+            ssim_loss = point_ssim(out, targets, pos)
+            total_ssim.append(ssim_loss.item())
 
 
     elif mode == 'Q2T':
         for data in test_loader:
-            data = data.to(device)
-            input = data.q.reshape(1, data.q.shape[0], 1)
-            pos = data.pos.unsqueeze(0)
-            targets = data.t.reshape(-1)
+            pos, t, q = to_packed(data, device=device, fields=('pos', 't', 'q'), squeeze_1d=False, non_blocking=True)
+            input = q
+            targets = t
 
-            out = model(input, pos).reshape(-1)
+            out = model(input, pos)
 
             loss_var = criterion_func(out, targets).mean(dim=0)
             loss = loss_var.mean()
             total_losses.append(loss.item())
+            ssim_loss = point_ssim(out, targets, pos)
+            total_ssim.append(ssim_loss.item())
 
     elif mode == 'T2T':
         for data in test_loader:
-            data = data.to(device)
-            input = data.t[:, :11].unsqueeze(0)
-            pos = data.pos.unsqueeze(0)
-            targets = data.t[:, 11:].reshape(-1)
+            pos, t, q = to_packed(data, device=device, fields=('pos', 't', 'q'), squeeze_1d=False, non_blocking=True)
+            input = t[:, :, :11]
+            targets = t[:, :, 11:]
 
-            out = model(input, pos).reshape(-1)
+            out = model(input, pos)
 
             loss_var = criterion_func(out, targets).mean(dim=0)
             loss = loss_var.mean()
-
             total_losses.append(loss.item())
+            ssim_loss = point_ssim(out, targets, pos)
+            total_ssim.append(ssim_loss.item())
 
     elif mode == 'S2Q':
         for data in test_loader:
-            data = data.to(device)
-            input = data.surf.unsqueeze(0)
-            pos = data.pos.unsqueeze(0)
-            targets = data.q.reshape(-1)
+            pos, t, q, surf, surf_pos = to_packed(data, device=device, fields=('pos', 't', 'q','surf', 'surf_pos'), squeeze_1d=False, non_blocking=True)
+            input = surf
+            targets = q
 
-            out = model(input, pos).reshape(-1)
-
-            loss_var = criterion_func(out, targets).mean(dim=0)
-            loss = loss_var.mean()
-
-            total_losses.append(loss.item())
-
-    elif mode == 'S2Q_sp':
-        for data in test_loader:
-            data = data.to(device)
-            input = data.surf.unsqueeze(0)
-            surf_pos = data.surf_pos.unsqueeze(0)
-            targets = data.q.reshape(-1)
-
-            out = model(input, surf_pos).reshape(-1)
+            out = model(input, pos, surf_pos)
 
             loss_var = criterion_func(out, targets).mean(dim=0)
             loss = loss_var.mean()
-
             total_losses.append(loss.item())
+            ssim_loss = point_ssim(out, targets, pos)
+            total_ssim.append(ssim_loss.item())
 
-    return np.mean(total_losses)
+    return np.mean(total_losses), np.mean(total_ssim)
 
 def evaluate(device, model, test_dataset, mode):
     from utils.metrics import metrics
     model.to(device)
     model.eval()
 
+    data_range = None
     total_losses = []
     total_ssim = []
     test_loader = DataLoader(test_dataset, batch_size=1)
     criterion_func = nn.MSELoss(reduction='none')
-    if mode == 'T2Q':
-        for data in test_loader:
-            data = data.to(device)
-            input = data.t.unsqueeze(0)
-            pos = data.pos.unsqueeze(0)
-            targets = data.q.reshape(-1)
 
-            out = model(input, pos).reshape(-1)
+    with torch.inference_mode():
+        if mode == 'T2Q':
+            for data in test_loader:
+                pos, t, q = to_packed(data, device=device, fields=('pos', 't', 'q'), squeeze_1d=False,non_blocking=True)
+                input = t
+                targets = q
 
-            loss_var = criterion_func(out, targets).mean(dim=0)
-            loss = loss_var.mean()
-            total_losses.append(loss.item())
+                out = model(input, pos)
 
-            loss_ssim = ssim(out.detach().cpu().numpy(), targets.detach().cpu().numpy())
-            total_ssim.append(loss_ssim)
+                loss_var = criterion_func(out, targets).mean(dim=0)
+                loss = loss_var.mean()
+                total_losses.append(loss.item())
 
-        print(f'Average MSE loss: {np.mean(total_losses)}')
-        print(f'Average SSIM loss: {np.mean(total_ssim)}')
-        err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F = metrics(test_loader, model, 1.0, 1.0, 1.0, mode='T2Q')
+                loss_ssim = point_ssim(out, targets, pos)
+                total_ssim.append(loss_ssim.item())
 
-        return np.mean(total_losses), np.mean(total_ssim), err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F
+            print(f'Average MSE loss: {np.mean(total_losses)}')
+            print(f'Average SSIM loss: {np.mean(total_ssim)}')
+            err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F = metrics(test_loader, model, 1.0, 1.0, 1.0, mode='T2Q')
 
-    elif mode == 'Q2T':
-        for data in test_loader:
-            data = data.to(device)
-            input = data.q.reshape(1, data.q.shape[0], 1)
-            pos = data.pos.unsqueeze(0)
-            targets = data.t.reshape(-1)
 
-            out = model(input, pos).reshape(-1)
+        elif mode == 'Q2T':
+            for data in test_loader:
+                pos, t, q = to_packed(data, device=device, fields=('pos', 't', 'q'), squeeze_1d=False,non_blocking=True)
+                input = q
+                targets = t
 
-            loss_var = criterion_func(out, targets).mean(dim=0)
-            loss = loss_var.mean()
-            total_losses.append(loss.item())
+                out = model(input, pos)
 
-            loss_ssim = ssim(out.detach().cpu().numpy(), targets.detach().cpu().numpy())
-            total_ssim.append(loss_ssim)
+                loss_var = criterion_func(out, targets).mean(dim=0)
+                loss = loss_var.mean()
+                total_losses.append(loss.item())
 
-        print(f'Average MSE loss: {np.mean(total_losses)}')
-        print(f'Average SSIM loss: {np.mean(total_ssim)}')
-        err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F = metrics(test_loader, model, 1.0, 1.0, 1.0, mode='Q2T')
+                loss_ssim = point_ssim(out, targets, pos)
+                total_ssim.append(loss_ssim.item())
 
-        return np.mean(total_losses), np.mean(total_ssim), err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F
+            print(f'Average MSE loss: {np.mean(total_losses)}')
+            print(f'Average SSIM loss: {np.mean(total_ssim)}')
+            err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F = metrics(test_loader, model, 1.0, 1.0, 1.0, mode='Q2T')
 
-    elif mode == 'T2T':
-        for data in test_loader:
-            data = data.to(device)
-            input = data.t[:, :11].unsqueeze(0)
-            pos = data.pos.unsqueeze(0)
-            targets = data.t[:, 11:].reshape(-1)
 
-            out = model(input, pos).reshape(-1)
+        elif mode == 'T2T':
+            for data in test_loader:
+                pos, t, q = to_packed(data, device=device, fields=('pos', 't', 'q'), squeeze_1d=False, non_blocking=True)
+                input = t[:, :, :11]
+                targets = t[:, :, 11:]
 
-            loss_var = criterion_func(out, targets).mean(dim=0)
-            loss = loss_var.mean()
-            total_losses.append(loss.item())
+                out = model(input, pos)
 
-            loss_ssim = ssim(out.detach().cpu().numpy(), targets.detach().cpu().numpy())
-            total_ssim.append(loss_ssim)
+                loss_var = criterion_func(out, targets).mean(dim=0)
+                loss = loss_var.mean()
+                total_losses.append(loss.item())
 
-        print(f'Average MSE loss: {np.mean(total_losses)}')
-        print(f'Average SSIM loss: {np.mean(total_ssim)}')
-        err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F = metrics(test_loader, model, 1.0, 1.0, 1.0, mode='T2T')
+                loss_ssim = point_ssim(out, targets, pos)
+                total_ssim.append(loss_ssim.item())
 
-        return np.mean(total_losses), np.mean(total_ssim), err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F
+            print(f'Average MSE loss: {np.mean(total_losses)}')
+            print(f'Average SSIM loss: {np.mean(total_ssim)}')
+            err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F = metrics(test_loader, model, 1.0, 1.0, 1.0, mode='T2T')
 
-    elif mode == 'S2Q':
-        for data in test_loader:
-            data = data.to(device)
-            input = data.surf.unsqueeze(0)
-            pos = data.pos.unsqueeze(0)
-            targets = data.q.reshape(-1)
 
-            out = model(input, pos).reshape(-1)
+        elif mode == 'S2Q':
+            for data in test_loader:
+                pos, t, q, surf, surf_pos = to_packed(data, device=device, fields=('pos', 't', 'q', 'surf', 'surf_pos'), squeeze_1d=False, non_blocking=True)
+                input = surf
+                targets = q
 
-            loss_var = criterion_func(out, targets).mean(dim=0)
-            loss = loss_var.mean()
-            total_losses.append(loss.item())
+                out = model(input, pos, surf_pos)
 
-            loss_ssim = ssim(out.detach().cpu().numpy(), targets.detach().cpu().numpy())
-            total_ssim.append(loss_ssim)
+                loss_var = criterion_func(out, targets).mean(dim=0)
+                loss = loss_var.mean()
+                total_losses.append(loss.item())
 
-        print(f'Average MSE loss: {np.mean(total_losses)}')
-        print(f'Average SSIM loss: {np.mean(total_ssim)}')
-        err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F = metrics(test_loader, model, 1.0, 1.0, 1.0, mode='S2Q')
+                loss_ssim = point_ssim(out, targets, pos)
+                total_ssim.append(loss_ssim.item())
+
+            print(f'Average MSE loss: {np.mean(total_losses)}')
+            print(f'Average SSIM loss: {np.mean(total_ssim)}')
+            err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F = metrics(test_loader, model, 1.0, 1.0, 1.0, mode='S2Q')
+
 
         return np.mean(total_losses), np.mean(total_ssim), err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F
 
-    elif mode == 'S2Q_sp':
-        for data in test_loader:
-            data = data.to(device)
-            input = data.surf.unsqueeze(0)
-            surf_pos = data.surf_pos.unsqueeze(0)
-            targets = data.q.reshape(-1)
-
-            out = model(input, surf_pos).reshape(-1)
-
-            loss_var = criterion_func(out, targets).mean(dim=0)
-            loss = loss_var.mean()
-            total_losses.append(loss.item())
-
-            loss_ssim = ssim(out.detach().cpu().numpy(), targets.detach().cpu().numpy())
-            total_ssim.append(loss_ssim)
-
-        print(f'Average MSE loss: {np.mean(total_losses)}')
-        print(f'Average SSIM loss: {np.mean(total_ssim)}')
-        err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F = metrics(test_loader, model, 1.0, 1.0, 1.0, mode='S2Q_sp')
-
-        return np.mean(total_losses), np.mean(total_ssim), err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F
 
 class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -332,9 +292,9 @@ class NumpyEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
-def main(device, train_dataset, test_dataset, Net, hparams, path, mode, OOD=False):
+def main(device, train_dataset, test_dataset, Net, hparams, path, mode):
     model = Net.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=hparams['lr'])
+    optimizer = torch.optim.Adam(model.parameters(), lr=hparams['lr'], weight_decay=hparams['weight_decay'])
     lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(
         optimizer,
         max_lr=hparams['lr'],
@@ -343,30 +303,30 @@ def main(device, train_dataset, test_dataset, Net, hparams, path, mode, OOD=Fals
     )
     start = time.time()
 
-    train_loss, test_loss = 1e5, 1e5
-    pbar_train = tqdm(range(hparams['epochs']), position=0)
+    train_loss, test_loss, test_ssim = 1e5, 1e5, 1e5
+    pbar_train = tqdm(range(hparams['epochs']), position=0, ncols=120, mininterval=1.0)
     train_loss_list = []
     test_loss_list = []
 
     sampler = RandomSampler(train_dataset, replacement=False)
-    train_loader = DataLoader(train_dataset, sampler=sampler, batch_size=hparams['batch_size'], drop_last=True)
-    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+    train_loader = DataLoader(train_dataset, sampler=sampler, batch_size=hparams['batch_size'],
+                              num_workers=0, pin_memory=True, drop_last=True)
+    test_loader = DataLoader(test_dataset, batch_size=1, num_workers=0, pin_memory=True, shuffle=False)
 
     for epoch in pbar_train:
-        # train_loader = DataLoader(train_dataset, batch_size=hparams['batch_size'], shuffle=True, drop_last=True)
         sampler.generator = torch.Generator().manual_seed(epoch)
         train_loss = train(device, model, train_loader, optimizer, lr_scheduler, mode)
         train_loss_list.append(train_loss)
-        # del (train_loader)
 
-        # test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
-        test_loss = test(device, model, test_loader, mode)
-        test_loss_list.append(test_loss)
-        # del (test_loader)
+        interval = max(1, hparams['epochs'] // 10)
+        if (epoch + 1) % interval == 0:
+            test_loss, test_ssim = test(device, model, test_loader, mode)
+            test_loss_list.append(test_loss)
+            # del (test_loader)
 
-        if epoch % 5 == 0:
-            plt.plot(train_loss_list, label='Train Loss')
-            plt.plot(test_loss_list, label='Test Loss', linestyle='--')
+            plt.plot(range(1, len(train_loss_list) + 1), train_loss_list, label='Train Loss')
+            plt.plot([(i + 1) * interval for i in range(len(test_loss_list))],
+                     test_loss_list, label='Test Loss', linestyle='--', marker='o')
             plt.xlabel('Epochs')
             plt.ylabel('Loss')
             plt.title('Loss Curve')
@@ -383,26 +343,27 @@ def main(device, train_dataset, test_dataset, Net, hparams, path, mode, OOD=Fals
                 plt.yscale('linear')
                 plt.grid(alpha=0.3)
 
-            plt.savefig(path + 'loss_curve.png')
+            plt.savefig(os.path.join(path, 'loss_curve.png'))
             plt.clf()
 
-        pbar_train.set_postfix(train_loss=train_loss, test_loss=test_loss)
+        pbar_train.set_postfix(loss=train_loss, mse=test_loss, ssim=test_ssim)
 
     end = time.time()
     time_elapsed = end - start
     params_model = get_nb_trainable_params(model).astype('float')
     # print('Number of parameters:', params_model)
     print('Time elapsed: {0:.2f} seconds'.format(time_elapsed))
-    torch.save(model.state_dict(), path + os.sep + f'model_{hparams["epochs"]}_{mode}.pth')
+    torch.save(model.state_dict(), path + os.sep + f'{hparams["model_name"]}_{hparams["epochs"]}_{hparams["mode"]}.pth')
 
     mse_loss, ssim_loss, err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F = evaluate(device, model, test_dataset, mode=mode)
 
-    if os.path.exists(path + os.sep + f'log_{hparams["epochs"]}_{mode}.json'):
-        with open(path + os.sep + f'log_{hparams["epochs"]}_{mode}.json', 'r') as f:
+    log_path = os.path.join(path, f'log_{hparams["model_name"]}_{hparams["epochs"]}_{mode}.json')
+    if os.path.exists(log_path):
+        with open(log_path, 'r') as f:
             try:
                 data = json.load(f)
                 if not isinstance(data, list):
-                    data = [data]  # 如果原来是单个对象，转换为列表
+                    data = [data]
             except json.JSONDecodeError:
                 data = []
     else:
@@ -422,7 +383,7 @@ def main(device, train_dataset, test_dataset, Net, hparams, path, mode, OOD=Fals
         'RMSE in Fourier space': err_F,
     }
     data.append(new_entry)
-    with open(path + os.sep + f'log_{hparams["epochs"]}_{mode}.json', 'w') as f:
+    with open(log_path, 'w') as f:
         json.dump(data, f, indent=12, cls=NumpyEncoder)
 
     return model

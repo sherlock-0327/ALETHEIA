@@ -7,7 +7,7 @@ from scipy.sparse.linalg import spsolve
 import torch
 import argparse
 import train
-from dataset import load_all_data
+from dataset import load_data
 import os
 
 
@@ -34,7 +34,7 @@ class FEMHeatSolver(nn.Module):
         mass = np.eye(self.num_points)
         return csr_matrix(stiffness), csr_matrix(mass)
 
-    def forward(self, x, grid=None):
+    def forward(self, x, grid=None, surf_pos=None):
         """
         x: (batch_size, num_points, in_channels)
         """

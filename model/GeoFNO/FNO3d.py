@@ -115,10 +115,11 @@ class FNO3d(nn.Module):
         self.fc1 = nn.Linear(self.width, 128)
         self.fc2 = nn.Linear(128, out_channels)
 
-    def forward(self, x, pos):
-        x = x.reshape(1, self.H, self.W, self.D, -1) # (Batch, size_x, size_y, size_z, channel)
+    def forward(self, x, pos, surf_pos=None):
+        B, N, C = x.shape
+        x = x.reshape(B, self.H, self.W, self.D, C) # (Batch, size_x, size_y, size_z, channel)
         # grid = self.get_grid(x.shape, x.device)
-        grid = pos.reshape(1, self.H, self.W, self.D, -1)
+        grid = pos.reshape(B, self.H, self.W, self.D, -1)
         x = torch.cat((x, grid), dim=-1)
         x = self.fc0(x)
         x = x.permute(0, 4, 1, 2, 3)
@@ -149,7 +150,7 @@ class FNO3d(nn.Module):
         x = F.gelu(x)
         x = self.fc2(x)
 
-        x = x.reshape(-1,1)
+        x = x.reshape(B, N, -1)
         return x
 
     def get_grid(self, shape, device):

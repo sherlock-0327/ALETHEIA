@@ -112,5 +112,3 @@ The benchmark experiments were conducted using the following resources:
 - **Hardware**: NVIDIA 4090 GPU, 24 GB memory.
 - **Training Time**: Approximately 0.5 to 2 hours per model for 600 samples, depending on the task and model.
 
-
-

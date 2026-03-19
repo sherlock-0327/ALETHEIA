@@ -3,86 +3,24 @@ import os
 import torch
 import argparse
 
-from dataset import load_all_data
-from model.Transolver.Transolver_Irregular_3D import Model as Transolver
-from model.Transolver.benchmark.Transolver_Structured_Mesh_3D import Model as Transolver_Structured_Mesh_3D
-from model.GeoFNO.FNO3d import FNO3d
-from model.GeoFNO.GNO import GNO
-from model.GeoFNO.GeoFNO import GeoFNO
-from model.mlp import MLP
-from model.GeoFNO.FFNO import FNOFactorizedMesh3D as FFNO
-from model.GeoFNO.FCNO import CNOFactorizedMesh3D as FCNO
-from model.LNO.LNO import LNO, LNO_single, LNO_triple
-from model.DeepONet.deeponet import DeepONet
-from model.FEM import FEMHeatSolver
+from dataset import load_data
 
-def get_model(args):
-    if args.model == 'Transolver':
-        model = Transolver(n_hidden=256, n_layers=8, space_dim=3,
-                           fun_dim=args.in_channels,
-                           n_head=8,
-                           mlp_ratio=2, out_dim=args.out_channels,
-                           slice_num=32,
-                           # dropout=0.2,
-                           unified_pos=0)
-    elif args.model == 'Transolver_R':
-        model = Transolver_Structured_Mesh_3D(n_hidden=256, n_layers=8, space_dim=3,
-                                              fun_dim=args.in_channels,
-                                              n_head=8,
-                                              mlp_ratio=2, out_dim=args.out_channels,
-                                              slice_num=32,
-                                              H=20, W=20, D=20,
-                                              # dropout=0.2,
-                                              unified_pos=0)
-    elif args.model == 'FNO3d':
-        model = FNO3d(modes1=12, modes2=12, modes3=8, width=32, in_channels=args.in_channels,
-                      out_channels=args.out_channels, H=20, W=20, D=20)
-    elif args.model == 'GNO':
-        model = GNO(width=32, in_channel=args.in_channels, out_channel=args.out_channels, r=1e-8)
-    elif args.model == 'GeoFNO':
-        model = GeoFNO(modes1=12, modes2=12, modes3=8, width=32, in_channels=args.in_channels,
-                       out_channels=args.out_channels, s=20)
-    elif args.model == 'MLP':
-        model = MLP(in_channels=args.in_channels, out_channels=args.out_channels, hidden_channels=32, n_layers=4,
-                    n_dim=1)
-    elif args.model == 'FFNO':
-        model = FFNO(modes_x=12, modes_y=12, modes_z=8, input_dim=args.in_channels, output_dim=args.out_channels,
-                     width=32, n_layers=4,
-                     share_weight=False, factor=4, n_ff_layers=2, ff_weight_norm=True, layer_norm=False, H=20, W=20,
-                     D=20)
-    elif args.model == 'FFNO-share':
-        model = FFNO(modes_x=12, modes_y=12, modes_z=8, input_dim=args.in_channels, output_dim=args.out_channels,
-                     width=32, n_layers=4,
-                     share_weight=True, factor=4, n_ff_layers=2, ff_weight_norm=True, layer_norm=False, H=20, W=20,
-                     D=20)
-    elif args.model == 'FCNO':
-        model = FCNO(modes_x=12, modes_y=12, modes_z=8, input_dim=args.in_channels, output_dim=args.out_channels,
-                     width=32, n_layers=4,
-                     share_weight=False, factor=4, n_ff_layers=2, ff_weight_norm=True, layer_norm=False, H=20, W=20,
-                     D=20)
-    elif args.model == 'LNO':
-        model_attr = dict()
-        model_attr['time'] = False
-        model = LNO(x_dim=3, y1_dim=args.in_channels, y2_dim=args.out_channels, n_block=4, n_mode=256, n_dim=128,
-                    n_head=8, n_layer=2, attn='Attention_Vanilla', act='GELU', model_attr=model_attr)
-    elif args.model == 'LNO_single':
-        model_attr = dict()
-        model_attr['time'] = False
-        model = LNO_single(x_dim=None, y1_dim=args.in_channels, y2_dim=args.out_channels, n_block=4, n_mode=256, n_dim=128,
-                           n_head=8, n_layer=2, attn='Attention_Vanilla', act='GELU', model_attr=model_attr)
-    elif args.model == 'DeepONet':  # Output can only be 1
-        model = DeepONet(branch_dim=3, trunk_dim=args.in_channels, branch_depth=2, trunk_depth=3, width=32)
-    elif args.model == 'FEM':
-        model = FEMHeatSolver(mode=args.mode, num_time_steps=args.out_channels, num_points=args.downsample_count)
-    else:
-        raise NotImplementedError("No model type found")
-    return model
+from model_builder import create_model, ALL_MODELS, MODEL_REGISTRY
 
+CRACK_TYPE = {
+    '1': 'single',
+    '2': 'I-double',
+    '3': 'II-double',
+    '4': 'III-double',
+    '5': 'I-multi',
+    '6': 'II-multi',
+}
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_root', default='/dataset path/')
 parser.add_argument('--data_type', type=str,
                     default='unstructured_data')
+parser.add_argument('--crack_type', type=str, default='2', choices=['1', '2', '3', '4', '5', '6'])
 parser.add_argument('--downsample_count', type=int, default=8000,
                     help='downsample points count')
 parser.add_argument('--surf_downsample_count', type=int, default=8000,
@@ -94,118 +32,114 @@ parser.add_argument('--gpu', default=0, type=int)
 
 parser.add_argument('--model', default='Transolver', type=str)
 parser.add_argument('--lr', default=0.0001, type=float)
+parser.add_argument('--weight_decay', default=0, type=float)
 parser.add_argument('--batch_size', default=1, type=int)
 parser.add_argument('--epochs', default=200, type=int)
 parser.add_argument('--in_channels', default=13, type=int)
 parser.add_argument('--out_channels', default=1, type=int)
 
 
+parser.add_argument("--OOD", default=None, type=str, help="OOD experiment", choices=[ '', 'high', 'low', 'mid', 'sfo'])
+parser.add_argument("--sfo_freq", default=None, type=int,
+                    help="when --OOD sfo: fixed training frequency index (1..10 maps to 1,4,...,100 kHz)",
+                    choices=range(1, 11))
+parser.add_argument("--sfo_train_num", default=None, type=int, help="when --OOD sfo: choose train num")
+parser.add_argument("--sfo_test_num", default=None, type=int, help="when --OOD sfo: choose test num")
+
+
 parser.add_argument("--eval", action="store_true", help="evaluate model or not")
-parser.add_argument("--OOD", action="store_true", help="OOD experiment or not")
 parser.add_argument('--use_surf', action="store_true", help="use surface data or not")
-parser.add_argument("--mode", type=str, default='T2Q', help="different tasks, include T2Q, Q2T and T2T")
+parser.add_argument("--mode", type=str, default='T2Q', choices=['T2Q', 'Q2T', 'T2T', 'S2Q'], help='task type')
 parser.add_argument('--training_num', type=int, default=1, help="The number of training sessions")
 
 args = parser.parse_args()
 print(args)
-
-hparams = {'lr': args.lr, 'batch_size': args.batch_size, 'epochs': args.epochs}
-
 n_gpu = torch.cuda.device_count()
 use_cuda = 0 <= args.gpu < n_gpu and torch.cuda.is_available()
 device = torch.device(f'cuda:{args.gpu}' if use_cuda else 'cpu')
 
 print("Loading VTU data...")
-if args.OOD:
-    all_graphs, stats = load_all_data(
-        args.data_root,
-        max_workers=1, # Read the data evenly and split it directly
-        data_num=args.data_num,
-        downsample_count=args.downsample_count,
-        surf_downsample_count=args.surf_downsample_count,
-        data_type=args.data_type,
-        normalize=True,
-        unit_normalize=True,
-        use_surf=args.use_surf
-    )
-    # print(stats)
-    N = len(all_graphs)
-    split = int(10 - args.test_split * 10)
-    train_graphs = []
-    test_graphs = []
-    for i in range(0, len(all_graphs), 10):
-        block = all_graphs[i:i+10]
-        if len(block) < 10:
-            # Ignore incomplete data blocks
-            continue
-        train_graphs.extend(block[:split])
-        test_graphs.extend(block[split:])
-    print(f"Dataset size: total={N}, train={len(train_graphs)}, test={len(test_graphs)}")
-    print("OOD　Experiment")
 
+if args.OOD == 'sfo':
+    if getattr(args, 'sfo_train_num', None) is None:
+        # Fallback if not provided (though your args check usually enforces it)
+        calc_train_num = int(args.data_num * (1 - args.test_split))
+        calc_test_num = int(args.data_num * args.test_split)
+    else:
+        calc_train_num = args.sfo_train_num
+        calc_test_num = args.sfo_test_num
 else:
-    all_graphs, stats = load_all_data(
-        args.data_root,
-        max_workers=8,
-        data_num=args.data_num,
-        downsample_count=args.downsample_count,
-        surf_downsample_count=args.surf_downsample_count,
-        data_type=args.data_type,
-        normalize=True,
-        unit_normalize=True,
-        use_surf=args.use_surf
-    )
-    # print(stats)
-    N = len(all_graphs)
-    split = int((1 - args.test_split) * N)
-    train_graphs = all_graphs[:split]
-    test_graphs = all_graphs[split:]
-    print(f"Dataset size: total={N}, train={len(train_graphs)}, test={len(test_graphs)}")
-    print("All Freq　Experiment")
+    calc_train_num = int(args.data_num * (1 - args.test_split))
+    calc_test_num = int(args.data_num * args.test_split)
 
-model = get_model(args)
+ood_mode = args.OOD if args.OOD else 'normal'
+
+train_graphs, test_graphs, stats = load_data(
+    data_root=args.data_root,
+    data_type=args.data_type,
+    use_surf=args.use_surf,
+    train_num=calc_train_num,
+    test_num=calc_test_num,
+    ood_mode=ood_mode,
+    sfo_freq_index=args.sfo_freq,
+    downsample_count=args.downsample_count,
+    surf_downsample_count=args.surf_downsample_count,
+    max_workers=1,
+    normalize=True,
+    unit_normalize=True
+)
+
+print(f"Dataset size: train={len(train_graphs)}, test={len(test_graphs)}, OOD type: {ood_mode}")
+
+
+model = create_model(args.model, args)
 print(f'Model: {args.model}, Training Type:{args.mode}')
 
-path = f'checkpoints/{args.model}/{args.mode}/'
 if args.data_type == 'unstructured_data':
-    path = f'checkpoints/{args.model}/{args.mode}_uns/'
-    if args.OOD:
-        path = f'checkpoints/{args.model}/{args.mode}_uns_OOD/'
-    print("Irregular Data　Experiment")
+    sub = os.path.join(f'{args.mode}', f'{CRACK_TYPE[args.crack_type]}_uns', 'unstructured',
+                       (f'OOD_{args.OOD}' if args.OOD else 'normal'))
+    print("[DataType] Irregular (unstructured)" + (f' OOD Type: {args.OOD}' if args.OOD else 'normal'))
 elif args.data_type == 'structured_data':
-    path = f'checkpoints/{args.model}/{args.mode}_s/'
-    if args.OOD:
-        path = f'checkpoints/{args.model}/{args.mode}_s_OOD/'
-    print("Regular Data　Experiment")
+    sub = os.path.join(f'{args.mode}', f'{CRACK_TYPE[args.crack_type]}', 'structured',
+                       (f'OOD_{args.OOD}' if args.OOD else 'normal'))
+    print("[DataType] Regular (structured)" + (f' OOD Type: {args.OOD}' if args.OOD else 'normal'))
+else:
+    sub = f'{args.mode}'
 
-if not os.path.exists(path):
-    os.makedirs(path)
+save_dir = os.path.join('checkpoints', args.model, sub)
+if args.OOD == 'sfo':
+    save_dir = os.path.join(save_dir, str(args.sfo_freq ** 2) + 'kHz')
+os.makedirs(save_dir, exist_ok=True)
+
+hparams = {'lr': args.lr, 'weight_decay': args.weight_decay, 'batch_size': args.batch_size, 'epochs': args.epochs,
+           'data_num': args.data_num, 'data_type': args.data_type, 'crack_type': CRACK_TYPE[args.crack_type],
+           'mode': args.mode, 'model_name': args.model, 'in_channels': args.in_channels, 'out_channels': args.out_channels,
+           'point_num': args.downsample_count if not args.use_surf else args.surf_downsample_count,
+           'OOD': args.OOD}
+if args.OOD == 'sfo':
+    save_dir = os.path.join(save_dir, str(args.sfo_freq ** 2) + 'kHz')
+
+print(f'[MODEL PARAMETERS]: {sum(p.numel() for p in model.parameters())}]')
 
 if args.eval:
-    model_path = path + f'model_{hparams["epochs"]}_{args.mode}.pth'
+    ckpt_path = os.path.join(save_dir, f'{hparams["model_name"]}_{hparams["epochs"]}_{hparams["mode"]}.pth')
     try:
-        state_dict = torch.load(model_path)
-        if isinstance(state_dict, dict):
-            model.load_state_dict(state_dict)
-            print("Loaded model from state_dict.")
+        state = torch.load(ckpt_path, map_location='cpu')
+        if isinstance(state, dict):
+            model.load_state_dict(state)
+            print(f"[Eval] Loaded state_dict from {ckpt_path}")
         else:
-            model = state_dict
-            print("Loaded entire model object.")
-    except FileNotFoundError:
-        print("No checkpoint found at", model_path)
-    except AttributeError:
-        print("Loaded object has no state_dict, might be malformed.")
-    except TypeError as e:
-        print("Checkpoint type error:", e)
-    except RuntimeError as e:
-        print("Runtime error when loading model:", e)
+            model = state
+            print(f"[Eval] Loaded whole model object from {ckpt_path}")
+    except  Exception as e:
+        print(f"[Warn] Could not load checkpoint: {e}")
     train.evaluate(device, model, test_graphs, mode=args.mode)
 else:
     for i in range(args.training_num):
         try:
-            model = get_model(args)
-            _ = train.main(device, train_graphs, test_graphs, model, hparams, path, mode=args.mode, OOD=args.OOD)
-            print(f"Iteration {i} completed")
+            model = create_model(args.model, args)
+            _ = train.main(device, train_graphs, test_graphs, model, hparams, save_dir, mode=args.mode)
+            print(f"[Train] {args.model} | iteration {i} finished.")
         except Exception as e:
-            print(f"Error in iteration {i}: {e}")
+            print(f"[Error] {args.model} | iteration {i}: {e}")
             continue

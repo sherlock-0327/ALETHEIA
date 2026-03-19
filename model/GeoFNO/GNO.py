@@ -51,7 +51,7 @@ class GNO(BaseModel):
             edge_index[1, :] = edge_index[1, :] + N_in
         return edge_index.detach(), edge_attr.detach()
 
-    def forward(self, u_in, pos, x_in=None, x_out=None):
+    def forward(self, u_in, pos, surf_pos=None):
         """
         u_in: (N_in, C)
         x_in: (N_in, d) or None
@@ -59,6 +59,8 @@ class GNO(BaseModel):
         Synthesize features.
         x_out: (N_out, d) or None
         """
+        x_in = surf_pos if surf_pos is not None else pos
+        x_out = pos
         if x_in is None:
             x_in = u_in
             u_in = self.linear(x_in)

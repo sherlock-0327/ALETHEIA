@@ -3,8 +3,6 @@ import math
 import torch
 from torch import nn
 import torch.nn.functional as F
-from tltorch import TensorizedTensor
-from tltorch.utils import get_tensorized_shape
 
 
 class MLP(nn.Module):
@@ -43,14 +41,14 @@ class MLP(nn.Module):
             else:
                 self.fcs.append(Conv(self.hidden_channels, self.hidden_channels, 1))
 
-    def forward(self, x, pos):
+    def forward(self, x, pos, surf_pos=None):
         x = torch.cat((x, pos), dim=-1)
         x = x.permute(0, 2, 1)
         for i, fc in enumerate(self.fcs):
             x = fc(x)
-            if i < self.n_layers:
+            if i < self.n_layers - 1:
                 x = self.non_linearity(x)
-            if self.dropout is not None:
-                x = self.dropout(x)
+                if self.dropout is not None:
+                    x = self.dropout[i](x)
 
-        return x
+        return x.permute(0, 2, 1)
