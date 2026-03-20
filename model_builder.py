@@ -14,7 +14,6 @@ from model.GeoFNO.FCNO import CNOFactorizedMesh3D as FCNO
 from model.LNO.LNO import LNO, LNO_single
 from model.DeepONet.deeponet import DeepONet
 from model.FEM import FEMHeatSolver
-from model.TestModel.Test_Model import Model as TestModel
 from model.LaMO.LaMO_Irregular_Mesh_unshared import Model as LaMO
 
 # ==========================================
@@ -128,9 +127,6 @@ def build_FEM(args):
     return FEMHeatSolver(mode=args.mode, num_time_steps=args.out_channels, num_points=args.downsample_count)
 
 
-def build_TestModel(args):
-    return TestModel(fun_dim=args.in_channels, out_dim=args.out_channels)
-
 # ==========================================
 # Registry
 # ==========================================
@@ -151,7 +147,6 @@ MODEL_REGISTRY = {
     'LNO_single': build_LNO_single,
     'DeepONet': build_DeepONet,
     'FEM': build_FEM,
-    'TestModel': build_TestModel,
     'LaMO': build_LaMO,
 }
 
