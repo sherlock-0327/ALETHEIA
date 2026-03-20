@@ -10,29 +10,8 @@ PY="${REPO_ROOT}/run_all_models_exps.py"
 
 check_dir() { [ -d "$1" ] || { echo "[ERROR] Not found: $1"; exit 1; }; }
 
-#1
-#DATA_DIR_UNS="/home/data8t/sherlock/dataset/PDE/Irregular/Aletheia/single_layer"
-#DATA_DIR_STR="/home/data8t/sherlock/dataset/PDE/Irregular/Aletheia/single_layer"
-#CRACK_TYPE=1
-#2
-#DATA_DIR_UNS="/home/data8t/sherlock/dataset/PDE/Irregular/Aletheia/typeI_double-layer"
-#DATA_DIR_STR="/home/data8t/sherlock/dataset/PDE/Irregular/Aletheia/typeI_double-layer"
-#CRACK_TYPE=2
-#3
-#DATA_DIR_UNS="/home/data8t/sherlock/dataset/PDE/Irregular/Aletheia/typeII_double-layer"
-#DATA_DIR_STR="/home/data8t/sherlock/dataset/PDE/Irregular/Aletheia/typeII_double-layer"
-#CRACK_TYPE=3
-#4
-#DATA_DIR_UNS="/home/data8t/sherlock/dataset/PDE/Irregular/Aletheia/typeIII_double-layer"
-#DATA_DIR_STR="/home/data8t/sherlock/dataset/PDE/Irregular/Aletheia/typeIII_double-layer"
-#CRACK_TYPE=4
-#5
-#DATA_DIR_UNS="/home/data8t/sherlock/dataset/PDE/Irregular/Aletheia/typeI_multi-layer"
-#DATA_DIR_STR="/home/data8t/sherlock/dataset/PDE/Irregular/Aletheia/typeI_multi-layer"
-#CRACK_TYPE=5
-#6
-DATA_DIR_UNS="/home/data8t/sherlock/dataset/PDE/Irregular/Aletheia/typeII_multi-layer"
-DATA_DIR_STR="/home/data8t/sherlock/dataset/PDE/Irregular/Aletheia/typeII_multi-layer"
+DATA_DIR_UNS="/data root/"
+DATA_DIR_STR="/data root/"
 CRACK_TYPE=6
 
 check_dir "${DATA_DIR_UNS}"
