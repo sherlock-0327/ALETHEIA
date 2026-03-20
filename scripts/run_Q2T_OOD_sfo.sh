@@ -10,17 +10,8 @@ PY="${REPO_ROOT}/run_all_models_exps.py"
 
 check_dir() { [ -d "$1" ] || { echo "[ERROR] Not found: $1"; exit 1; }; }
 
-#2
-#DATA_DIR_UNS="/home/omnisky/Wyk_team/sherlock/dataset/PDE/Irregular/Aletheia/typeI_double-layer"
-#DATA_DIR_STR="/home/omnisky/Wyk_team/sherlock/dataset/PDE/Irregular/Aletheia/typeI_double-layer"
-
-#4
-#DATA_DIR_UNS="/home/omnisky/Wyk_team/sherlock/dataset/PDE/Irregular/Aletheia/typeIII_double-layer"
-#DATA_DIR_STR="/home/omnisky/Wyk_team/sherlock/dataset/PDE/Irregular/Aletheia/typeIII_double-layer"
-
-#6
-DATA_DIR_UNS="/home/omnisky/Wyk_team/sherlock/dataset/PDE/Irregular/Aletheia/typeII_multi-layer"
-DATA_DIR_STR="/home/omnisky/Wyk_team/sherlock/dataset/PDE/Irregular/Aletheia/typeII_multi-layer"
+DATA_DIR_UNS="/data root/"
+DATA_DIR_STR="/data root/"
 
 CRACK_TYPE=6
 
