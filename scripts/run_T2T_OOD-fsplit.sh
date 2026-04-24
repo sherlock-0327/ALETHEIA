@@ -18,13 +18,9 @@ check_dirs() {
 }
 
 TRAIN_DIRS=(
-  /home/data8t/sherlock/dataset/PDE/Irregular/Aletheia/single_layer
-  /home/data8t/sherlock/dataset/PDE/Irregular/Aletheia/typeI_double-layer
-  /home/data8t/sherlock/dataset/PDE/Irregular/Aletheia/typeII_double-layer
-  /home/data8t/sherlock/dataset/PDE/Irregular/Aletheia/typeIII_double-layer
-  /home/data8t/sherlock/dataset/PDE/Irregular/Aletheia/typeI_multi-layer
+  /data root/
 )
-TEST_DIR=/home/data8t/sherlock/dataset/PDE/Irregular/Aletheia/typeII_multi-layer
+TEST_DIR=/data root/
 
 TEST_CRACK_TYPE=6
 
