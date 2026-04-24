@@ -7,26 +7,18 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PY="${REPO_ROOT}/run_all_models_exps.py"
 [ -f "${PY}" ] || { echo "[ERROR] Not found: ${PY}"; exit 1; }
 
-
 check_dir() { [ -d "$1" ] || { echo "[ERROR] Not found: $1"; exit 1; }; }
 
-#2
-#DATA_DIR_UNS="/home/omnisky/Wyk_team/sherlock/dataset/PDE/Irregular/Aletheia/typeI_double-layer"
-#DATA_DIR_STR="/home/omnisky/Wyk_team/sherlock/dataset/PDE/Irregular/Aletheia/typeI_double-layer"
+DATA_BASE="/home/data8t/sherlock/dataset/PDE/Irregular/Aletheia"
 
-#4
-#DATA_DIR_UNS="/home/omnisky/Wyk_team/sherlock/dataset/PDE/Irregular/Aletheia/typeIII_double-layer"
-#DATA_DIR_STR="/home/omnisky/Wyk_team/sherlock/dataset/PDE/Irregular/Aletheia/typeIII_double-layer"
-
-#6
-DATA_DIR_UNS="/home/omnisky/Wyk_team/sherlock/dataset/PDE/Irregular/Aletheia/typeII_multi-layer"
-DATA_DIR_STR="/home/omnisky/Wyk_team/sherlock/dataset/PDE/Irregular/Aletheia/typeII_multi-layer"
-
-CRACK_TYPE=6
-
-check_dir "${DATA_DIR_UNS}"
-check_dir "${DATA_DIR_STR}"
-
+declare -A DATASET_SUBDIR=(
+  [1]="single_layer"
+  [2]="typeI_double-layer"
+  [3]="typeII_double-layer"
+  [4]="typeIII_double-layer"
+  [5]="typeI_multi-layer"
+  [6]="typeII_multi-layer"
+)
 
 IN_CH=11
 OUT_CH=2
@@ -38,21 +30,20 @@ BATCH_SIZE=4
 LR=0.0001
 DOWNSAMPLE_COUNT=8000
 SURF_DOWNSAMPLE_COUNT=8000
-TRAINING_NUM=1
+TRAINING_NUM=3
 TEST_SPLIT=0.2
 DATA_NUM=600
 
 SFO_TRAIN_NUM=480
 SFO_TEST_NUM=120
 
-
 MODELS_UNS="Transolver,MLP,FNO3d,GeoFNO,FFNO,FCNO,LNO"
 MODELS_STR="Transolver,MLP,FNO3d,GeoFNO,FFNO,FCNO,LNO"
 
 run_phase() {
-  local TAG="$1" DTYPE="$2" ROOT="$3" FREQ_INDEX="$4" MODELS_LIST="$5"
+  local CRACK_TYPE="$1" TAG="$2" DTYPE="$3" ROOT="$4" FREQ_INDEX="$5" MODELS_LIST="$6"
 
-  echo "[RUN] T2T | tag=${TAG} | dtype=${DTYPE} | SFO_freq=${FREQ_INDEX} | root=${ROOT}"
+  echo "[RUN] T2T | crack_type=${CRACK_TYPE} | tag=${TAG} | dtype=${DTYPE} | SFO_freq=${FREQ_INDEX} | root=${ROOT}"
   CMD=(python "${PY}"
        --mode T2T
        --data_root "${ROOT}"
@@ -79,17 +70,41 @@ run_phase() {
   ( cd "${REPO_ROOT}" && CUDA_VISIBLE_DEVICES="${GPU}" "${CMD[@]}" )
 }
 
+run_all_sfo_for_type() {
+  local crack_type="$1" data_dir_uns="$2" data_dir_str="$3"
 
-run_phase "SFO_9kHZ_uns"    "unstructured_data"  "${DATA_DIR_UNS}"  3   "${MODELS_UNS}"
+  local freq_label freq_index
+  for freq_label in 9kHz 36kHz 81kHz; do
+    case "${freq_label}" in
+      9kHz)  freq_index=3 ;;
+      36kHz) freq_index=6 ;;
+      81kHz) freq_index=9 ;;
+      *) echo "[ERROR] Unsupported freq label: ${freq_label}"; exit 1 ;;
+    esac
 
-run_phase "SFO_9kHZ_s"      "structured_data"    "${DATA_DIR_STR}"  3   "${MODELS_STR}"
+    run_phase "${crack_type}" "SFO_${freq_label}_uns" "unstructured_data" "${data_dir_uns}" "${freq_index}" "${MODELS_UNS}"
+    run_phase "${crack_type}" "SFO_${freq_label}_s"   "structured_data"   "${data_dir_str}" "${freq_index}" "${MODELS_STR}"
+  done
+}
 
-run_phase "SFO_36kHZ_uns"   "unstructured_data"  "${DATA_DIR_UNS}"  6   "${MODELS_UNS}"
+for CRACK_TYPE in 2 4 6; do
+  SUBDIR="${DATASET_SUBDIR[${CRACK_TYPE}]:-}"
+  if [ -z "${SUBDIR}" ]; then
+    echo "[ERROR] No dataset mapping for crack type ${CRACK_TYPE}"
+    exit 1
+  fi
 
-run_phase "SFO_36kHZ_uns"   "structured_data"    "${DATA_DIR_STR}"  6   "${MODELS_STR}"
+  DATA_DIR_UNS="${DATA_BASE}/${SUBDIR}"
+  DATA_DIR_STR="${DATA_BASE}/${SUBDIR}"
 
-run_phase "SFO_81kHZ_uns"   "unstructured_data"  "${DATA_DIR_UNS}"  9   "${MODELS_UNS}"
+  check_dir "${DATA_DIR_UNS}"
+  check_dir "${DATA_DIR_STR}"
 
-run_phase "SFO_81kHZ_uns"   "structured_data"    "${DATA_DIR_STR}"  9   "${MODELS_STR}"
+  echo "=================================================="
+  echo "[MAIN] Start crack_type=${CRACK_TYPE}, subdir=${SUBDIR}"
+  echo "=================================================="
 
-echo "[MAIN] All T2T SFO OOD experiments finished."
+  run_all_sfo_for_type "${CRACK_TYPE}" "${DATA_DIR_UNS}" "${DATA_DIR_STR}"
+done
+
+echo "[MAIN] All T2T SFO OOD experiments finished for crack_type 2/4/6."

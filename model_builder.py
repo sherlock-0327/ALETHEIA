@@ -110,14 +110,14 @@ def build_LNO(args):
     model_attr = dict(time=False)
     return LNO(x_dim=3, y1_dim=args.in_channels, y2_dim=args.out_channels,
                n_block=4, n_mode=256, n_dim=128,
-               n_head=8, n_layer=2, attn='Attention_Vanilla', act='GELU', model_attr=model_attr)
+               n_head=8, n_layer=3, attn='Nystrom', act='GELU', model_attr=model_attr)
 
 
 def build_LNO_single(args):
     model_attr = dict(time=False)
     return LNO_single(x_dim=None, y1_dim=args.in_channels, y2_dim=args.out_channels,
                       n_block=4, n_mode=256, n_dim=128,
-                      n_head=8, n_layer=2, attn='Attention_Vanilla', act='GELU', model_attr=model_attr)
+                      n_head=8, n_layer=3, attn='Nystrom', act='GELU', model_attr=model_attr)
 
 
 def build_DeepONet(args):  # Only support out_channels == 1

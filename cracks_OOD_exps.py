@@ -76,7 +76,7 @@ def build_save_dir_and_ckpt_name(model_name: str, args) -> (str, str):
     test_crack_type = args.test_crack_type
     crack_gather = '123456'.replace(test_crack_type, "")
 
-    sub = os.path.join(f'{args.mode}', f'{dtype_tag}', f'{scheme_tag}', f"train_{crack_gather}_test_{test_crack_type}")
+    sub = os.path.join(f'{args.mode}', f'{scheme_tag}', f'{dtype_tag}',  f"train_{crack_gather}_test_{test_crack_type}")
 
     save_dir = os.path.join('checkpoints', model_name, sub)
     os.makedirs(save_dir, exist_ok=True)

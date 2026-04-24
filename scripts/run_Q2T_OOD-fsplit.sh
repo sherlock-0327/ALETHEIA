@@ -26,6 +26,8 @@ TRAIN_DIRS=(
 )
 TEST_DIR=/home/data8t/sherlock/dataset/PDE/Irregular/Aletheia/typeII_multi-layer
 
+TEST_CRACK_TYPE=6
+
 check_dirs "${TRAIN_DIRS[@]}" "${TEST_DIR}"
 TRAINS_CSV="$(csv_join "${TRAIN_DIRS[@]}")"
 
@@ -36,11 +38,10 @@ IN_CH=1
 OUT_CH=13
 USE_SURF=0
 
-GPU=3
+GPU=0
 EPOCHS=200
 BATCH_SIZE=4
 LR=0.0001
-TEST_CRACK_TYPE=6
 DOWNSAMPLE_COUNT=8000
 SURF_DOWNSAMPLE_COUNT=8000
 TRAINING_NUM=3
@@ -75,7 +76,7 @@ run_phase() {
 
 un_phase() { run_phase "$@"; }
 
-#run_phase "uns" "unstructured_data" "${MODELS_UNS}"
+run_phase "uns" "unstructured_data" "${MODELS_UNS}"
 
 run_phase "s"   "structured_data"   "${MODELS_STR}"
 

@@ -137,17 +137,20 @@ class Model(nn.Module):
 
     def get_grid(self, batchsize=1):
         size_x, size_y = self.H, self.W
+
+        device = next(self.parameters()).device
+
         gridx = torch.tensor(np.linspace(0, 1, size_x), dtype=torch.float)
         gridx = gridx.reshape(1, size_x, 1, 1).repeat([batchsize, 1, size_y, 1])
         gridy = torch.tensor(np.linspace(0, 1, size_y), dtype=torch.float)
         gridy = gridy.reshape(1, 1, size_y, 1).repeat([batchsize, size_x, 1, 1])
-        grid = torch.cat((gridx, gridy), dim=-1).cuda()  # B H W 2
+        grid = torch.cat((gridx, gridy), dim=-1).to(device)  # B H W 2
 
         gridx = torch.tensor(np.linspace(0, 1, self.ref), dtype=torch.float)
         gridx = gridx.reshape(1, self.ref, 1, 1).repeat([batchsize, 1, self.ref, 1])
         gridy = torch.tensor(np.linspace(0, 1, self.ref), dtype=torch.float)
         gridy = gridy.reshape(1, 1, self.ref, 1).repeat([batchsize, self.ref, 1, 1])
-        grid_ref = torch.cat((gridx, gridy), dim=-1).cuda()  # B H W 8 8 2
+        grid_ref = torch.cat((gridx, gridy), dim=-1).to(device)  # B H W 8 8 2
 
         pos = torch.sqrt(torch.sum((grid[:, :, :, None, None, :] - grid_ref[:, None, None, :, :, :]) ** 2, dim=-1)). \
             reshape(batchsize, size_x, size_y, self.ref * self.ref).contiguous()

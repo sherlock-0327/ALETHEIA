@@ -267,11 +267,11 @@ class LNO(torch.nn.Module):
         for block in self.attn_blocks:
             z = block(z)
 
-        if not self.training:
-            self.last_score_encode = score_encode.detach()
-            self.last_score_decode = score_decode.detach()
-            last_block = self.attn_blocks[-1]
-            self.last_attn_tokens = last_block.self_attn.last_attn.detach()
+        # if not self.training:
+        #     self.last_score_encode = score_encode.detach()
+        #     self.last_score_decode = score_decode.detach()
+        #     last_block = self.attn_blocks[-1]
+        #     self.last_attn_tokens = last_block.self_attn.last_attn.detach()
 
         r = torch.einsum("bij,bjc->bic", score_decode, z)
         r = self.out_mlp(r)

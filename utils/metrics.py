@@ -155,8 +155,6 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from torch import nn
 import einops
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 def to_packed(data, device, fields=("pos","t","q"), squeeze_1d=True, non_blocking=True):
     data = data.to(device, non_blocking=non_blocking)
 
@@ -176,7 +174,7 @@ def to_packed(data, device, fields=("pos","t","q"), squeeze_1d=True, non_blockin
         outs.append(x)
     return outs[0] if len(outs)==1 else tuple(outs)
 
-def metric_func(pred, target, if_mean=True, Lx=1.0, Ly=1.0, Lz=1.0, iLow=4, iHigh=12, initial_step=1):
+def metric_func(pred, target, device=None, if_mean=True, Lx=1.0, Ly=1.0, Lz=1.0, iLow=4, iHigh=12, initial_step=1):
     """
     code for calculate metrics discussed in the Brain-storming session
     RMSE, normalized RMSE, max error, RMSE at the boundaries, conserved variables, RMSE in Fourier space, temporal sensitivity
@@ -329,6 +327,7 @@ def metrics(
     mode='T2Q',
     initial_step=None,
 ):
+    device = next(model.parameters()).device
     if mode == 'T2Q':
         with torch.no_grad():
             itot = 0
@@ -348,7 +347,7 @@ def metrics(
                     _err_Max,
                     _err_BD,
                     _err_F,
-                ) = metric_func(pred, targets, if_mean=True, Lx=Lx, Ly=Ly, Lz=Lz, initial_step=initial_step)
+                ) = metric_func(pred, targets, device=device, if_mean=True, Lx=Lx, Ly=Ly, Lz=Lz, initial_step=initial_step)
 
                 if itot == 0:
                     err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F = (
@@ -395,7 +394,7 @@ def metrics(
                     _err_Max,
                     _err_BD,
                     _err_F,
-                ) = metric_func(pred, targets, if_mean=True, Lx=Lx, Ly=Ly, Lz=Lz, initial_step=initial_step)
+                ) = metric_func(pred, targets, device=device, if_mean=True, Lx=Lx, Ly=Ly, Lz=Lz, initial_step=initial_step)
 
                 if itot == 0:
                     err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F = (
@@ -441,7 +440,7 @@ def metrics(
                     _err_Max,
                     _err_BD,
                     _err_F,
-                ) = metric_func(pred, targets, if_mean=True, Lx=Lx, Ly=Ly, Lz=Lz, initial_step=initial_step)
+                ) = metric_func(pred, targets, device=device, if_mean=True, Lx=Lx, Ly=Ly, Lz=Lz, initial_step=initial_step)
 
                 if itot == 0:
                     err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F = (
@@ -488,7 +487,7 @@ def metrics(
                     _err_Max,
                     _err_BD,
                     _err_F,
-                ) = metric_func(pred, targets, if_mean=True, Lx=Lx, Ly=Ly, Lz=Lz, initial_step=initial_step)
+                ) = metric_func(pred, targets, device=device, if_mean=True, Lx=Lx, Ly=Ly, Lz=Lz, initial_step=initial_step)
 
                 if itot == 0:
                     err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F = (
@@ -536,7 +535,7 @@ def metrics(
                     _err_Max,
                     _err_BD,
                     _err_F,
-                ) = metric_func(pred, targets, if_mean=True, Lx=Lx, Ly=Ly, Lz=Lz, initial_step=initial_step)
+                ) = metric_func(pred, targets, device=device, if_mean=True, Lx=Lx, Ly=Ly, Lz=Lz, initial_step=initial_step)
 
                 if itot == 0:
                     err_RMSE, err_nRMSE, err_CSV, err_Max, err_BD, err_F = (

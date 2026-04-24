@@ -26,6 +26,8 @@ TRAIN_DIRS=(
 )
 TEST_DIR=/home/data8t/sherlock/dataset/PDE/Irregular/Aletheia/typeII_multi-layer
 
+TEST_CRACK_TYPE=6
+
 check_dirs "${TRAIN_DIRS[@]}" "${TEST_DIR}"
 TRAINS_CSV="$(csv_join "${TRAIN_DIRS[@]}")"
 
@@ -36,11 +38,10 @@ IN_CH=11
 OUT_CH=2
 USE_SURF=0
 
-GPU=2
+GPU=1
 EPOCHS=200
 BATCH_SIZE=4
 LR=0.0001
-TEST_CRACK_TYPE=6
 DOWNSAMPLE_COUNT=8000
 SURF_DOWNSAMPLE_COUNT=8000
 TRAINING_NUM=3

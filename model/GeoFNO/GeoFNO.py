@@ -292,11 +292,17 @@ class IPHI(nn.Module):
         self.fc3 = nn.Linear(4 * self.width, 4 * self.width)
         self.fc4 = nn.Linear(4 * self.width, 1)
         self.activation = F.gelu
-        self.center = torch.tensor([0.0001, 0.0001], device="cuda").reshape(1, 1, 2)
+        # self.center = torch.tensor([0.0001, 0.0001], device="cuda").reshape(1, 1, 2)
+        center_tensor = torch.tensor([0.0001, 0.0001], dtype=torch.float).reshape(1, 1, 2)
+        self.register_buffer('center', center_tensor, persistent=False)
 
-        self.B = np.pi * torch.pow(
-            2, torch.arange(0, self.width // in_channels, dtype=torch.float, device="cuda")
+        # self.B = np.pi * torch.pow(
+        #     2, torch.arange(0, self.width // in_channels, dtype=torch.float, device="cuda")
+        # ).reshape(1, 1, 1, self.width // in_channels)
+        B_tensor = np.pi * torch.pow(
+            2, torch.arange(0, self.width // in_channels, dtype=torch.float)
         ).reshape(1, 1, 1, self.width // in_channels)
+        self.register_buffer('B', B_tensor, persistent=False)
 
     def forward(self, x, code=None, is_identity=False):
         # x (batch, N_grid, 2)

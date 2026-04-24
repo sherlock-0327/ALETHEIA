@@ -140,7 +140,7 @@ class Model(nn.Module):
         gridx = gridx.reshape(1, self.ref, 1, 1).repeat([batchsize, 1, self.ref, 1])
         gridy = torch.tensor(np.linspace(0, 1, self.ref), dtype=torch.float)
         gridy = gridy.reshape(1, 1, self.ref, 1).repeat([batchsize, self.ref, 1, 1])
-        grid_ref = torch.cat((gridx, gridy), dim=-1).cuda().reshape(batchsize, self.ref * self.ref, 2)  # B H W 8 8 2
+        grid_ref = torch.cat((gridx, gridy), dim=-1).to(x.device).reshape(batchsize, self.ref * self.ref, 2)  # B H W 8 8 2
 
         pos = torch.sqrt(torch.sum((x[:, :, None, :] - grid_ref[:, None, :, :]) ** 2, dim=-1)). \
             reshape(batchsize, x.shape[1], self.ref * self.ref).contiguous()
