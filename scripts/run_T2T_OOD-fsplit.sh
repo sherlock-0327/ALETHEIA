@@ -45,6 +45,7 @@ TRAINING_NUM=3
 MODELS_UNS="Transolver,MLP,FNO3d,GeoFNO,FFNO,FCNO,LNO,LaMO"
 MODELS_STR="Transolver,MLP,FNO3d,GeoFNO,FFNO,FCNO,LNO,LaMO"
 
+
 run_phase() {
   local TAG="$1" DTYPE="$2" MODELS_LIST="$3"
   echo "[RUN] T2T  dtype=${DTYPE}  in=${IN_CH}  out=${OUT_CH}  gpu=${GPU}"

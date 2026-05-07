@@ -10,7 +10,7 @@ PY="${REPO_ROOT}/run_all_models_exps.py"
 check_dir() { [ -d "$1" ] || { echo "[ERROR] Not found: $1"; exit 1; }; }
 
 # Shared dataset prefix; crack-type-specific folder is selected by mapping below.
-DATA_BASE="/home/data8t/sherlock/dataset/PDE/Irregular/Aletheia"
+DATA_BASE="/data path/"
 
 declare -A DATASET_SUBDIR=(
   [1]="single_layer"
@@ -25,7 +25,7 @@ IN_CH=1
 OUT_CH=13
 USE_SURF=0
 
-GPU=0
+GPU=1
 EPOCHS=200
 BATCH_SIZE=4
 LR=0.0001
@@ -38,8 +38,8 @@ DATA_NUM=600
 SFO_TRAIN_NUM=480
 SFO_TEST_NUM=120
 
-MODELS_UNS="Transolver,MLP,FNO3d,GeoFNO,FFNO,FCNO,LNO"
-MODELS_STR="Transolver,MLP,FNO3d,GeoFNO,FFNO,FCNO,LNO"
+MODELS_UNS="Transolver,MLP,FNO3d,GeoFNO,FFNO,FCNO,LNO,LaMO"
+MODELS_STR="Transolver,MLP,FNO3d,GeoFNO,FFNO,FCNO,LNO.LaMO"
 
 run_phase() {
   local CRACK_TYPE="$1" TAG="$2" DTYPE="$3" ROOT="$4" FREQ_INDEX="$5" MODELS_LIST="$6"
@@ -88,7 +88,7 @@ run_all_sfo_for_type() {
   done
 }
 
-for CRACK_TYPE in 2 4 6; do
+for CRACK_TYPE in 4; do
   SUBDIR="${DATASET_SUBDIR[${CRACK_TYPE}]:-}"
   if [ -z "${SUBDIR}" ]; then
     echo "[ERROR] No dataset mapping for crack type ${CRACK_TYPE}"

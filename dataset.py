@@ -427,7 +427,10 @@ def load_data(
         max_workers: int = 1,
         normalize: bool = True,
         unit_normalize: bool = True,
-        seed: int = 42
+        seed: int = 42,
+        multi_data_roots: List[str] = None,
+        per_crack_train: int = None,
+        per_crack_test: int = None,
 ):
     """
     Splits SAMPLES first, collects all valid files, then SHUFFLES files globally.
@@ -439,22 +442,81 @@ def load_data(
     train_tasks = []
     test_tasks = []
 
-    # --- Case A: Explicit Folder Split ---
-    if extra_train_dirs is not None and extra_test_dir is not None:
-        print(f"[LoadData] Mode: Folder Split (Explicit Dirs)")
+    # --- Case C: Multi-Root (each crack independently collects + truncates) ---
+    if multi_data_roots is not None:
+        n_cracks = len(multi_data_roots)
+        total_req = (train_num or 0) + (test_num or 0)
+        train_ratio = (train_num or 0) / total_req if total_req > 0 else 0
 
-        # 1. Train Candidates
+        print(f"[LoadData] Mode: Multi-Root ({n_cracks} roots) | OOD: {ood_mode}")
+
+        for root in multi_data_roots:
+            all_groups = _scan_simulations([root], data_type, use_surf)
+            all_prefixes = list(all_groups.keys())
+            valid_prefixes = [p for p in all_prefixes if len(all_groups[p]) >= 10]
+            random.shuffle(valid_prefixes)
+            n_total = len(valid_prefixes)
+
+            # Determine sample split based on mode
+            if ood_mode == 'sfo':
+                n_train_samples = min(per_crack_train or train_num or n_total, n_total)
+            elif ood_mode in ('high', 'low', 'mid'):
+                n_train_samples = n_total  # all samples; freq filter splits train/test
+            else:  # normal
+                n_train_samples = int(n_total * train_ratio)
+
+            train_prefixes = valid_prefixes[:n_train_samples]
+            # OOD/SFO: all samples contribute to both train and test (different freq instances)
+            test_prefixes = valid_prefixes if ood_mode in ('high', 'low', 'mid', 'sfo') else valid_prefixes[n_train_samples:]
+
+            # Collect instances from this root
+            root_train, root_test = [], []
+            for p in train_prefixes:
+                kept = _apply_freq_filter(all_groups[p], ood_mode, is_train_set=True, sfo_idx=sfo_freq_index)
+                root_train.extend(kept)
+            for p in test_prefixes:
+                kept = _apply_freq_filter(all_groups[p], ood_mode, is_train_set=False, sfo_idx=sfo_freq_index)
+                root_test.extend(kept)
+
+            # Per-crack shuffle + truncate (like Folder Split per-folder)
+            random.shuffle(root_train)
+            random.shuffle(root_test)
+            train_tasks.extend(root_train[:per_crack_train])
+            test_tasks.extend(root_test[:per_crack_test])
+
+        print(f"[LoadData] Loading {len(train_tasks)} Train files, {len(test_tasks)} Test files.")
+
+        train_data = _process_loading(train_tasks, max_workers, "Loading Train",
+                                      downsample_count, None, surf_downsample_count, None, data_type, use_surf)
+        test_data = _process_loading(test_tasks, max_workers, "Loading Test",
+                                     downsample_count, None, surf_downsample_count, None, data_type, use_surf)
+
+        stats = {}
+        if normalize:
+            stats = normalize_datasets(train_data, test_data, use_surf=use_surf, unit_normalize=unit_normalize)
+        return train_data, test_data, stats
+
+    # --- Case A: Explicit Folder Split (per-folder collection + truncation) ---
+    elif extra_train_dirs is not None and extra_test_dir is not None:
+        print(f"[LoadData] Mode: Folder Split (Explicit Dirs)")
+        per_folder = train_num // len(extra_train_dirs) if train_num else 0
+
         for d in extra_train_dirs:
             groups = _scan_simulations([d], data_type, use_surf)
+            folder_tasks = []
             for p, tasks in groups.items():
                 kept = _apply_freq_filter(tasks, ood_mode, is_train_set=True, sfo_idx=sfo_freq_index)
-                train_tasks.extend(kept)
+                folder_tasks.extend(kept)
+            random.shuffle(folder_tasks)
+            train_tasks.extend(folder_tasks[:per_folder])
 
-        # 2. Test Candidates
         groups_test = _scan_simulations([extra_test_dir], data_type, use_surf)
+        test_pool = []
         for p, tasks in groups_test.items():
             kept = _apply_freq_filter(tasks, ood_mode, is_train_set=False, sfo_idx=sfo_freq_index)
-            test_tasks.extend(kept)
+            test_pool.extend(kept)
+        random.shuffle(test_pool)
+        test_tasks = test_pool[:test_num]
 
     # --- Case B: Single Root Split ---
     else:
@@ -612,7 +674,7 @@ def load_data_by_cases(
 
 if __name__ == '__main__':
     # Usage Example
-    root = "/home/omnisky/Wyk_team/sherlock/dataset/PDE/Irregular/Aletheia/typeI_double-layer"
+    root = "/data path/"
 
     # Example SFO: Train on 1kHz (Sim set A), Test on others (Sim set B)
     tr, te, st = load_data(root, train_num=100, test_num=20, ood_mode='sfo', sfo_freq_index=5, use_surf=True, downsample_count=8000)

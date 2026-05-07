@@ -10,7 +10,7 @@ PY="${REPO_ROOT}/run_all_models_exps.py"
 check_dir() { [ -d "$1" ] || { echo "[ERROR] Not found: $1"; exit 1; }; }
 
 # Dataset base path (shared prefix for all crack types)
-DATA_BASE="/home/data8t/sherlock/dataset/PDE/Irregular/Aletheia"
+DATA_BASE="/data path/"
 
 # Crack type -> folder mapping
 # 1: single_layer
@@ -40,7 +40,7 @@ BATCH_SIZE=4
 LR=0.0001
 DOWNSAMPLE_COUNT=8000
 SURF_DOWNSAMPLE_COUNT=8000
-TRAINING_NUM=2
+TRAINING_NUM=3
 TEST_SPLIT=0.2
 DATA_NUM=600
 

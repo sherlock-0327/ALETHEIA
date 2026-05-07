@@ -17,6 +17,7 @@ check_dirs() {
   [ -d "$test_dir" ] || { echo "[ERROR] Not found: $test_dir"; exit 1; }
 }
 
+
 TRAIN_DIRS=(
   /data root/
 )
