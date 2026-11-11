@@ -169,7 +169,7 @@ class Model(nn.Module):
             reshape(batchsize, size_x, size_y, size_z, self.ref * self.ref * self.ref).contiguous()
         return pos
 
-    def forward(self, fx, pos, T=None):
+    def forward(self, fx, pos, surf_pos=None, T=None):
         if self.unified_pos:
             pos = self.pos.repeat(pos.shape[0], 1, 1, 1, 1).reshape(pos.shape[0], self.H * self.W * self.D,
                                                                 self.ref * self.ref * self.ref)
@@ -181,7 +181,7 @@ class Model(nn.Module):
             fx = fx + self.placeholder[None, None, :]
 
         if T is not None:
-            Time_emb = timestep_embedding(T, self.n_hidden).repeat(1, x.shape[1], 1)
+            Time_emb = timestep_embedding(T, self.n_hidden).repeat(1, fx.shape[1], 1)
             Time_emb = self.time_fc(Time_emb)
             fx = fx + Time_emb
 

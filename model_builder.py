@@ -71,7 +71,7 @@ def build_GFNO(args):
 
 
 def build_GNO(args):
-    return GNO(width=32, in_channel=args.in_channels, out_channel=args.out_channels, r=1e-8)
+    return GNO(width=32, in_channel=args.in_channels, out_channel=args.out_channels, r=0.2)
 
 
 def build_GeoFNO(args):

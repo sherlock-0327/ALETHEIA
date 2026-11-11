@@ -277,7 +277,7 @@ class SpectralConv3d(nn.Module):
 
 
 class IPHI(nn.Module):
-    def __init__(self, in_channels=3, width=36):
+    def __init__(self, in_channels=3, width=36, out_channels=1):
         super(IPHI, self).__init__()
 
         """
@@ -290,7 +290,9 @@ class IPHI(nn.Module):
         self.fc1 = nn.Linear(4 * self.width, 4 * self.width)
         self.fc2 = nn.Linear(4 * self.width, 4 * self.width)
         self.fc3 = nn.Linear(4 * self.width, 4 * self.width)
-        self.fc4 = nn.Linear(4 * self.width, 1)
+        # Predict one deformation factor per coordinate for a 3D mesh.
+        # The default single factor preserves the original scalar deformation.
+        self.fc4 = nn.Linear(4 * self.width, out_channels)
         self.activation = F.gelu
         # self.center = torch.tensor([0.0001, 0.0001], device="cuda").reshape(1, 1, 2)
         center_tensor = torch.tensor([0.0001, 0.0001], dtype=torch.float).reshape(1, 1, 2)
@@ -305,7 +307,7 @@ class IPHI(nn.Module):
         self.register_buffer('B', B_tensor, persistent=False)
 
     def forward(self, x, code=None, is_identity=False):
-        # x (batch, N_grid, 2)
+        # x (batch, N_grid, coordinate_dim)
         # code (batch, N_features)
 
         if is_identity:
@@ -417,30 +419,46 @@ class GeoFNO(BaseModel):
         self.b1 = nn.Conv3d(3, self.width, 1)
         self.b2 = nn.Conv3d(3, self.width, 1)
         self.b3 = nn.Conv3d(3, self.width, 1)
-        self.b4 = nn.Conv1d(in_channels, self.width, 1)
+        # The output bias receives 3D positions, not input field values.
+        self.b4 = nn.Conv1d(3, self.width, 1)
 
         self.fc1 = nn.Linear(self.width, 128)
         self.fc2 = nn.Linear(128, out_channels)
 
-        self.iphi = IPHI(in_channels=in_channels, width=3*in_channels)
+        # Warp physical XYZ coordinates independently of the field channels.
+        self.iphi = IPHI(in_channels=3, width=36, out_channels=3)
+
+    @staticmethod
+    def _check_positions(coordinates, batch_size, name):
+        """Require one three-dimensional coordinate set per batch item."""
+        if coordinates.ndim != 3 or coordinates.shape[0] != batch_size or coordinates.shape[-1] != 3:
+            raise ValueError(f"{name} must have shape [B,N,3]")
 
     def forward(self, u, pos, surf_pos=None, code=None, x_in=None, x_out=None):
         # u (batch, Nx, d) the input value
         # code (batch, Nx, d) the input features
-        # x_in (batch, Nx, 2) the input mesh (sampling mesh)
-        # xi (batch, xi1, xi2, 2) the computational mesh (uniform)
-        # x_in (batch, Nx, 2) the input mesh (query mesh)
+        # x_in (batch, N_in, 3) is the input sampling mesh.
+        # x_out (batch, N_out, 3) is the output query mesh.
+        # xi (batch, s1, s2, s3, 3) is the uniform computational mesh.
 
         # u = self.fc_3dto2d(u)
         B, N, C = u.shape
-        if self.is_mesh and x_in == None:
-            x_in = u
-        if self.is_mesh and x_out == None:
-            x_out = u
-        # grid = self.get_grid([u.shape[0], self.s1, self.s2, self.s3], u.device).permute(
-        #     0, 4, 1, 2, 3
-        # )
-        grid = pos.reshape(B, 3, self.s1, self.s2, self.s3)
+        self._check_positions(pos, B, "pos")
+        use_aligned_skip = x_in is None and x_out is None
+        if x_in is None:
+            x_in = pos
+        if x_out is None:
+            x_out = pos
+        self._check_positions(x_in, B, "x_in")
+        self._check_positions(x_out, B, "x_out")
+        if x_in.shape[1] != N:
+            raise ValueError("GeoFNO requires one source coordinate per input value")
+        if use_aligned_skip and N != pos.shape[1]:
+            raise ValueError("GeoFNO requires input values aligned with target pos")
+
+        # Bias the latent regular grid without reshaping unordered sample positions.
+        grid = self.get_grid((B, self.s1, self.s2, self.s3), u.device)
+        grid = grid.permute(0, 4, 1, 2, 3).to(dtype=u.dtype)
 
         u = self.fc0(u)
         u = u.permute(0, 2, 1)
@@ -471,7 +489,10 @@ class GeoFNO(BaseModel):
 
         u = self.conv4(uc, x_out=x_out, iphi=self.iphi, code=code)
         u3 = self.b4(x_out.permute(0, 2, 1))
-        u = u + u3 + u0
+        u = u + u3
+        # The pointwise skip assumes the default same-index input/output layout.
+        if use_aligned_skip:
+            u = u + u0
 
         u = u.permute(0, 2, 1)
         u = self.fc1(u)
