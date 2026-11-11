@@ -43,11 +43,11 @@ The [COMSOL model](Hand-built-model-type2.mph) and batch script are included in 
 
 ## Experimental Data
 
-Download the two infrared thermography recordings from the **Assets** section of the **Experimental Data** release on the [GitHub Releases page](https://github.com/sherlock-0327/ALETHEIA/releases). Extract each ZIP archive to obtain the corresponding MATLAB file. These recordings support calibration and comparison with the COMSOL simulations.
+Download the two MATLAB files directly from the **Assets** section of the **Experimental Data** release on the [GitHub Releases page](https://github.com/sherlock-0327/ALETHEIA/releases). These infrared thermography recordings support calibration and comparison with the COMSOL simulations.
 
-| Release asset | Extracted file | Specimen | Excitation frequency | Applied bias |
-| --- | --- | --- | --- | --- |
-| `exp_data_1.zip` | `exp_data_1.mat` | Defect No. 1 | 25 kHz | None |
-| `exp_data_2.zip` | `exp_data_2.mat` | Defect No. 2 | 25 kHz | None |
+| Release asset | Specimen | Excitation frequency | Applied bias |
+| --- | --- | --- | --- |
+| `exp_data_1.mat` | Defect No. 1 | 25 kHz | None |
+| `exp_data_2.mat` | Defect No. 2 | 25 kHz | None |
 
 Each MATLAB file contains 300 surface-temperature frames (`Frame1` through `Frame300`). Each frame is a 480 × 640 matrix with a corresponding `FrameN_DateTime` timestamp variable.
