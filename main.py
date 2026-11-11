@@ -116,8 +116,6 @@ hparams = {'lr': args.lr, 'weight_decay': args.weight_decay, 'batch_size': args.
            'mode': args.mode, 'model_name': args.model, 'in_channels': args.in_channels, 'out_channels': args.out_channels,
            'point_num': args.downsample_count if not args.use_surf else args.surf_downsample_count,
            'OOD': args.OOD}
-if args.OOD == 'sfo':
-    save_dir = os.path.join(save_dir, str(args.sfo_freq ** 2) + 'kHz')
 
 print(f'[MODEL PARAMETERS]: {sum(p.numel() for p in model.parameters())}]')
 
@@ -128,11 +126,13 @@ if args.eval:
         if isinstance(state, dict):
             model.load_state_dict(state)
             print(f"[Eval] Loaded state_dict from {ckpt_path}")
-        else:
+        elif isinstance(state, torch.nn.Module):
             model = state
             print(f"[Eval] Loaded whole model object from {ckpt_path}")
-    except  Exception as e:
-        print(f"[Warn] Could not load checkpoint: {e}")
+        else:
+            raise TypeError(f"Expected a state dict or model, got {type(state).__name__}")
+    except Exception as e:
+        raise SystemExit(f"[Error] Could not load checkpoint {ckpt_path}: {e}") from e
     train.evaluate(device, model, test_graphs, mode=args.mode)
 else:
     for i in range(args.training_num):
