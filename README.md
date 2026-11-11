@@ -37,44 +37,7 @@ Part 2 contains both Type I and Type II double-layer cases. After extraction, pl
 
 ## Simulated Data Generation
 
-1. **Create a Geometric Model**:
-   - Construct a 3D model of a steel rail (100 × 70 × 45 mm) in COMSOL Multiphysics, incorporating customizable defects.
-   - Define defect parameters to generate diverse defect cases, as described in paper.
-
-2. **Set Material Properties**:
-   - Assign standard physical properties for steel rails, including:
-     - Electrical conductivity: 1.3 × 10^7 S/m
-     - Thermal conductivity: 48 W/m·K
-     - Density: 8000 kg/m³
-     - Other thermal and electromagnetic properties as specified in paper.
-
-3. **Define Electromagnetic Induction Heating**:
-   - Configure coil parameters in COMSOL:
-     - Excitation: Current-driven coil.
-     - Wire model: Single wire.
-     - Coil current: Variable parameter for 600 ms sinusoidal pulses at 1–100 kHz.
-   - Apply electromagnetic field equations to simulate eddy current induction heating, as detailed in paper.
-
-4. **Grid Generation**:
-   - Generate a free tetrahedral grid, with finer meshing in defect areas and regions of eddy current penetration depth.
-   - Implement adaptive grid refinement strategies to capture defect details accurately, as described in paper.
-
-5. **Set Up the Solver**:
-   - Use a time-dependent solver with a simulation time span of 0 to 0.6 seconds and a fixed time step of 0.05 seconds.
-   - Employ the Backward Differentiation Formula (BDF) for time integration to ensure accurate capture of thermal diffusion dynamics.
-   - Set boundary conditions:
-     - Thermal convection with ambient air, using a heat transfer coefficient of 5 W/m²·K.
-
-6. **Export Results**:
-   - Output simulation results in VTU format, including volumetric heat source (Q) and temperature (T) fields for each of the 10 excitation frequencies.
-   - Export both surface and internal data for all simulation cases, as detailed in paper.
-   - Use the provided Python script `/comsol/comsol_control.py` to batch configure defect shapes and export results, enabling efficient generation of large-scale simulation samples.
-
-7. **Alternative for Non-COMSOL Users**:
-   - Preprocessed VTU files are available in the Kaggle dataset.
-   - You can directly use our data in benchmark tasks.
-
-This pipeline ensures reproducibility of the Aletheia dataset’s simulation. Detailed instructions and scripts are provided in the `/comsol` directory of the repository to facilitate replication.
+See the [COMSOL README](comsol/README.md) for the simulation workflow and the two experimental infrared thermography recordings.
 
 ## Example
 
